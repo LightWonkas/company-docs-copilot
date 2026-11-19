@@ -19,7 +19,8 @@
     "check:secrets": "node .claude/hooks/block-secrets.mjs --tracked",
     "db:types": "tsx scripts/gen-types.ts",
     "test:mutation": "tsx scripts/mutation-test.ts",
-    "ingest:worker": "tsx scripts/ingest-worker.ts"
+    "ingest:worker": "tsx scripts/ingest-worker.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.11.0",

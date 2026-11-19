@@ -265,6 +265,16 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"chunk_sections":
+{ Args: { "p_chunk_ids": (string)[] }; Returns: {
+              "chunk_id": string,"section_id": string,"section_text": string
+            }[]
+                           },
+"hybrid_search":
+{ Args: { "p_candidates"?: number,"p_document_ids"?: (string)[],"p_languages"?: (string)[],"p_match_count"?: number,"p_query_embedding": string,"p_query_en"?: string,"p_query_folded"?: string,"p_query_tr"?: string,"p_rrf_k"?: number }; Returns: {
+              "chunk_id": string,"document_id": string,"document_title": string,"fts_rank": number,"heading_path": (string)[],"injection_suspected": boolean,"lang": string,"parent_id": string,"rrf_score": number,"text": string,"trgm_rank": number,"vector_distance": number,"vector_rank": number
+            }[]
+                           },
 "ingest_ack":
 { Args: { "p_msg_id": number }; Returns: boolean
                            },

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { LOGIN_PATH, isPublicPath } from "@/lib/auth/paths";
 import { getPublicEnv } from "@/lib/env";
+import type { Database } from "@/lib/supabase/database.types";
 
 /**
  * Refreshes the Supabase session cookies and does an *optimistic* redirect for
@@ -12,7 +13,7 @@ export async function updateSession(request: NextRequest) {
   const { supabaseUrl, supabasePublishableKey } = getPublicEnv();
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
+  const supabase = createServerClient<Database>(supabaseUrl, supabasePublishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

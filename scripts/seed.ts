@@ -1,9 +1,12 @@
 // Resets the LOCAL database, then seeds the Atlas Lojistik org, its personas
-// (seed/org.json) and, once ingestion exists, the synthetic corpus.
+// (seed/org.json) and the synthetic corpus, and runs the ingest worker.
 // This is an admin job, so it uses the secret key; it refuses non-local hosts.
+//   --no-reset   keep the current database
+//   --no-corpus  personas only
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createClient } from "@supabase/supabase-js";
+import { uploadCorpus } from "./lib/corpus";
+import { loadEnv, requireEnv, serviceClient } from "./lib/local";
 
 type Org = {
   org: { slug: string; name: string };
@@ -20,25 +23,13 @@ type Org = {
   emailDomain: string;
 };
 
-const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
-
-process.loadEnvFile(".env.local");
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const secretKey = process.env.SUPABASE_SECRET_KEY;
-const demoPassword = process.env.DEMO_PASSWORD;
-if (!url || !secretKey || !demoPassword) {
-  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SECRET_KEY / DEMO_PASSWORD; run `pnpm env:local`.");
-}
-
-// Seeding wipes data with the secret key. Refuse anything but the local stack.
-const { hostname } = new URL(url);
-if (!LOCAL_HOSTS.has(hostname)) throw new Error(`Refusing to seed non-local Supabase host "${hostname}".`);
+loadEnv();
+const db = serviceClient(); // throws for non-local hosts: seeding wipes data
+const demoPassword = requireEnv("DEMO_PASSWORD");
 
 if (!process.argv.includes("--no-reset")) {
   execSync("pnpm exec supabase db reset", { stdio: "inherit" });
 }
-
-const db = createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 async function must<T>(
   label: string,
@@ -91,3 +82,20 @@ for (const p of spec.personas) {
 }
 
 console.log(`Seeded ${spec.org.name}: ${departments.length} departments, ${teams.length} teams, ${spec.personas.length} personas.`);
+
+if (!process.argv.includes("--no-corpus")) {
+  const count = await uploadCorpus(db, org.id, spec.emailDomain);
+  console.log(`Uploaded ${count} corpus documents; ingesting…`);
+  const { getEmbedder } = await import("../src/lib/embeddings/embedder");
+  const { getAnthropic, models } = await import("../src/lib/llm/anthropic");
+  const { drainQueue } = await import("../src/lib/ingest/worker");
+  const client = getAnthropic();
+  if (!client) console.log("ANTHROPIC_API_KEY not set: no contextual retrieval, pattern-only injection screen.");
+  const stats = await drainQueue({ db, embedder: getEmbedder(), llm: client ? { client, model: models().helper } : null });
+  const chunks = stats.processed.reduce((n, r) => n + r.chunks, 0);
+  const flagged = stats.processed.filter((r) => r.flags.length).length;
+  console.log(
+    `Ingested ${stats.processed.length} documents (${chunks} chunks, ${flagged} with injection flags), ${stats.failed.length} failed.`,
+  );
+  for (const f of stats.failed) console.error(`  FAILED ${f.documentId}: ${f.error}`);
+}

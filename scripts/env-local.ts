@@ -28,6 +28,8 @@ env.set("SUPABASE_SECRET_KEY", status.get("SECRET_KEY")!);
 // Local demo login for the seeded personas: random per clone, never committed.
 if (!env.get("DEMO_PASSWORD")) env.set("DEMO_PASSWORD", randomBytes(18).toString("base64url"));
 if (!env.has("DEMO_MODE")) env.set("DEMO_MODE", "true");
+// Embedding models are downloaded once into the repo-local cache (gitignored).
+if (!env.has("MODEL_CACHE_DIR")) env.set("MODEL_CACHE_DIR", ".cache/models");
 
 writeFileSync(ENV_FILE, [...env].map(([k, v]) => `${k}=${v}`).join("\n") + "\n");
 console.log(`Wrote local settings to ${ENV_FILE} (${env.size} variables).`);

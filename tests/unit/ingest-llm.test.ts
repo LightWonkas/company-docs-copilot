@@ -21,8 +21,9 @@ describe("contextRequest", () => {
     expect(content[1].text).toContain("Language: Turkish");
   });
 
-  it("does not send budget_tokens (5.x models) and disables thinking for this helper", () => {
-    expect(req.thinking).toEqual({ type: "disabled" });
+  it("uses low effort instead of budget_tokens or disabled thinking (400s on 5.x)", () => {
+    expect(req.thinking).toBeUndefined();
+    expect(req.output_config).toEqual({ effort: "low" });
     expect(JSON.stringify(req)).not.toContain("budget_tokens");
   });
 });

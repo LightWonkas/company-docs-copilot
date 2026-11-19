@@ -45,11 +45,12 @@ export async function structuredCall<T extends z.ZodType>(args: {
   const message = await args.client.messages.parse({
     model: args.model,
     max_tokens: args.maxTokens ?? 512,
-    // Short classification/rewrite calls: thinking adds latency for no gain.
-    thinking: { type: "disabled" },
     system: args.system,
     messages: [{ role: "user", content: args.user }],
-    output_config: { format: zodOutputFormat(args.schema) },
+    // Short classification/rewrite calls: low effort instead of disabling
+    // thinking, because {type: "disabled"} is a 400 on Sonnet 5.5 / Opus 5.5
+    // and the helper model is configurable.
+    output_config: { format: zodOutputFormat(args.schema), effort: "low" },
   });
   const data = args.schema.parse(message.parsed_output);
   return { data, usage: usageOf(message.usage) };

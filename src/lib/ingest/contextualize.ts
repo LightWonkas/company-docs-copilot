@@ -19,7 +19,8 @@ export function contextRequest(args: {
   return {
     model: args.model,
     max_tokens: 200,
-    thinking: { type: "disabled" },
+    // Low effort, not disabled thinking: disabling is a 400 on some 5.x models.
+    output_config: { effort: "low" },
     system: CONTEXT_SYSTEM,
     messages: [
       {

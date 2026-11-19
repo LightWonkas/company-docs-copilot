@@ -1,0 +1,47 @@
+name: Nightly evals
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-eval:
+    name: Full golden set + permission suite + red team
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MODEL_CACHE_DIR: .cache/models
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/cache@v6
+        with:
+          path: .cache/models
+          key: models-e5-small-q8-v1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:start
+      - run: pnpm env:local
+      - run: pnpm seed
+      - run: pnpm test:mutation
+      # Full gates: leaks, injection ASR, citation validity, faithfulness drop.
+      - run: pnpm eval
+      - name: promptfoo model-graded RAG checks
+        if: env.ANTHROPIC_API_KEY != ''
+        run: pnpm eval:promptfoo
+      - name: promptfoo red team
+        if: env.ANTHROPIC_API_KEY != ''
+        run: pnpm eval:redteam
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: eval-results
+          path: evals/results/

@@ -387,12 +387,12 @@ enabled = false
 
 # OAuth server configuration
 [auth.oauth_server]
-# Enable OAuth server functionality
-enabled = false
+# Supabase Auth as the OAuth 2.1 authorization server for the MCP endpoint (beta).
+enabled = true
 # Path for OAuth consent flow UI
 authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration
-allow_dynamic_registration = false
+# MCP clients register themselves (DCR). CIMD is not supported by Supabase Auth.
+allow_dynamic_registration = true
 
 [edge_runtime]
 # No Edge Functions: the ingest worker runs in Node (docs/SPEC.md, M3).

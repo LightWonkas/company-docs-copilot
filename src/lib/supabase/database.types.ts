@@ -303,6 +303,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"slack_identities": {
+                  Row: {
+                    "created_at": string,"slack_user_id": string,"team_id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"slack_user_id": string,"team_id": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"slack_user_id"?: string,"team_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "slack_identities_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"teams": {
                   Row: {
                     "department_id": string,"id": string,"name": string,"org_id": string,"slug": string

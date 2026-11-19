@@ -126,7 +126,11 @@ function Answer({ message, showCost }: { message: ChatMessage; showCost: boolean
 }
 
 function SafeMarkdownInline({ text }: { text: string }) {
-  // Blocks are sentence fragments; render list/table-shaped blocks as markdown.
+  // Citation blocks can be table rows without a header row, which Markdown
+  // won't render as a table: show them monospaced instead.
+  if (text.split("\n").every((l) => l.trimStart().startsWith("|"))) {
+    return <pre className="my-1 whitespace-pre-wrap font-mono text-xs">{text}</pre>;
+  }
   return /\n/.test(text) ? <SafeMarkdown text={text} /> : <>{text}</>;
 }
 

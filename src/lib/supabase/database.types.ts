@@ -55,6 +55,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"conversations": {
+                  Row: {
+                    "channel": string,"created_at": string,"id": string,"org_id": string,"title": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "channel"?: string,"created_at"?: string,"id"?: string,"org_id": string,"title"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "channel"?: string,"created_at"?: string,"id"?: string,"org_id"?: string,"title"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "conversations_org_id_fkey"
+      columns: ["org_id"]
+isOneToOne: false
+      referencedRelation: "orgs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "conversations_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"departments": {
                   Row: {
                     "id": string,"name": string,"org_id": string,"slug": string
@@ -139,6 +165,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"feedback": {
+                  Row: {
+                    "created_at": string,"id": string,"message_id": string,"rating": number,"reason": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"message_id": string,"rating": number,"reason"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"message_id"?: string,"rating"?: number,"reason"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "feedback_message_id_fkey"
+      columns: ["message_id"]
+isOneToOne: false
+      referencedRelation: "messages"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "feedback_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"memberships": {
                   Row: {
                     "principal_id": string,"principal_type": Database["public"]['Enums']["principal_type"],"user_id": string
@@ -153,6 +205,32 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "memberships_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"messages": {
+                  Row: {
+                    "abstain_reason": string | null,"abstained": boolean,"blocks": NonNullable<Json>,"citations_invalid": number,"cited_chunk_ids": (string)[],"content": string,"conversation_id": string,"cost_usd": number | null,"created_at": string,"id": string,"latency_ms": number | null,"model": string | null,"prompt_version": string | null,"retrieved_chunk_ids": (string)[],"role": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "abstain_reason"?: string | null,"abstained"?: boolean,"blocks"?: NonNullable<Json>,"citations_invalid"?: number,"cited_chunk_ids"?: (string)[],"content": string,"conversation_id": string,"cost_usd"?: number | null,"created_at"?: string,"id"?: string,"latency_ms"?: number | null,"model"?: string | null,"prompt_version"?: string | null,"retrieved_chunk_ids"?: (string)[],"role": string,"user_id"?: string
+                  }
+                  Update: {
+                    "abstain_reason"?: string | null,"abstained"?: boolean,"blocks"?: NonNullable<Json>,"citations_invalid"?: number,"cited_chunk_ids"?: (string)[],"content"?: string,"conversation_id"?: string,"cost_usd"?: number | null,"created_at"?: string,"id"?: string,"latency_ms"?: number | null,"model"?: string | null,"prompt_version"?: string | null,"retrieved_chunk_ids"?: (string)[],"role"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "messages_conversation_id_fkey"
+      columns: ["conversation_id"]
+isOneToOne: false
+      referencedRelation: "conversations"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "messages_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
       referencedRelation: "profiles"

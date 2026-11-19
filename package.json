@@ -20,7 +20,10 @@
     "db:types": "tsx scripts/gen-types.ts",
     "test:mutation": "tsx scripts/mutation-test.ts",
     "ingest:worker": "tsx scripts/ingest-worker.ts",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "eval": "tsx evals/run.ts",
+    "eval:smoke": "tsx evals/run.ts --smoke",
+    "eval:calibrate": "tsx evals/calibrate.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.11.0",

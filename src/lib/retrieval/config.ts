@@ -22,7 +22,8 @@ export const ABSTAIN_THRESHOLDS: Record<string, number> = {
   "haiku-listwise": 0.4,
   voyage: 0.3,
   cohere: 0.3,
-  none: 0.8,
+  // Calibrated 2026-11-20 on golden v1 (e5-small, no contexts): 5.9% false / 40% true abstention.
+  none: 0.817,
 };
 
 export function abstainThreshold(rerankerId: string): number {

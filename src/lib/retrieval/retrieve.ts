@@ -27,6 +27,8 @@ export type Retrieval = {
   query: RewrittenQuery;
   /** Everything RLS let through, in fused order (for debug panel and audit). */
   candidates: RetrievedChunk[];
+  /** All candidates in reranked order (evals compute recall@20 / nDCG from this). */
+  ranked: RetrievedChunk[];
   /** Reranked top-K for the answer model. */
   results: RetrievedChunk[];
   reranker: string;
@@ -126,6 +128,7 @@ export async function retrieve(session: UserSession, query: string, opts: Retrie
   return {
     query: rewritten,
     candidates,
+    ranked,
     results,
     reranker: reranker.id,
     topScore,

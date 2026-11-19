@@ -25,7 +25,14 @@ export type FinalAnswer = {
   promptVersion: string;
   latencyMs: number;
   costUsd: number;
-  retrieval: { topScore: number; threshold: number; reranker: string; retrievedChunkIds: string[]; quarantined: number };
+  retrieval: {
+    topScore: number;
+    threshold: number;
+    reranker: string;
+    retrievedChunkIds: string[];
+    rankedChunkIds: string[];
+    quarantined: number;
+  };
 };
 
 export type AnswerEvent =
@@ -216,6 +223,7 @@ export async function answerQuestion(
       threshold: retrieval.threshold,
       reranker: retrieval.reranker,
       retrievedChunkIds,
+      rankedChunkIds: retrieval.ranked.map((c) => c.chunkId),
       quarantined: retrieval.results.length - context.length,
     },
   };

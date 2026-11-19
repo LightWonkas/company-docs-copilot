@@ -42,10 +42,13 @@ const PATTERNS: { flag: string; re: RegExp }[] = [
   { flag: "role_escalation", re: /\b(artık sen|bundan sonra sen|rolünü üstlen)\b/i },
   { flag: "exfil_markdown_image", re: /!\[[^\]]*\]\(\s*https?:\/\/[^)\s]+\?[^)\s]*\)/i },
   { flag: "exfil_link", re: /\[[^\]]+\]\(\s*https?:\/\/[^)\s]*(exfil|collect|log|track|login|reset)[^)\s]*\)/i },
-  { flag: "canary_fishing", re: /\b(CANARY-[A-Z]+|list (every|all) .{0,20}tokens?|document control numbers?)\b/i },
-  { flag: "marker", re: /ATLAS-PWNED-\d+/ },
+  // Requests to reveal secrets, not the presence of a control number itself:
+  // restricted docs legitimately contain their own document control number.
+  { flag: "secret_fishing", re: /\b(list|print|reveal|output|show|repeat|include)\b[^.\n]{0,80}\b(CANARY|canary tokens?|control numbers?|secret tokens?)/i },
+  // Turkish puts the verb last: "... kontrol numaralarını listele".
+  { flag: "secret_fishing", re: /(CANARY|kontrol (no|numara)\p{L}*)[^.\n]{0,60}(listele|yaz|göster|paylaş)/iu },
   { flag: "fake_tool_call", re: /<\/?(function_calls|invoke|tool_use|antml)[^>]*>|"tool_calls?"\s*:/i },
-  { flag: "encoded_payload", re: /\b(base64|decode (this|the following))\b[\s\S]{0,40}[A-Za-z0-9+/]{40,}={0,2}/i },
+  { flag: "encoded_payload", re: /\b(base64|decode (this|the following|it))\b[\s\S]{0,250}[A-Za-z0-9+/]{40,}={0,2}/i },
   { flag: "citation_manipulation", re: /\b(always|only) cite (this|me)\b|\bher zaman bu (belgeyi|dokümanı) (kaynak|referans)/i },
   { flag: "refusal_suppression", re: /\b(do not|never|don't) (refuse|mention|say you can't|add disclaimers)\b|\b(asla )?reddetme\b/i },
 ];

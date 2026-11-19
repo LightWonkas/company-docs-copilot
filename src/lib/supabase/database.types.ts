@@ -355,7 +355,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "audit_log":
+            "admin_dashboard":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"audit_log":
 { Args: { "p_before_id"?: number,"p_limit"?: number }; Returns: unknown[]
                           SetofOptions: {
         from: "*"

@@ -69,7 +69,8 @@ $$, array[
   'audit.purge_expired()',
   'private.enqueue_ingest()',
   'public.ingest_dequeue(integer, integer)',
-  'public.ingest_ack(bigint)'
+  'public.ingest_ack(bigint)',
+  'public.admin_dashboard()'
 ], 'security definer functions match the reviewed allowlist');
 
 select is_empty($$

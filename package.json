@@ -17,7 +17,7 @@
     "env:local": "node scripts/env-local.ts",
     "seed": "node scripts/seed.ts",
     "check:secrets": "node .claude/hooks/block-secrets.mjs --tracked",
-    "db:types": "supabase gen types typescript > src/lib/supabase/database.types.ts",
+    "db:types": "node scripts/gen-types.ts",
     "test:mutation": "node scripts/mutation-test.ts"
   },
   "dependencies": {

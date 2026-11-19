@@ -1,0 +1,34 @@
+{
+  "org": { "slug": "atlas-lojistik", "name": "Atlas Lojistik A.Ş." },
+  "departments": [
+    { "slug": "hr", "name": "İnsan Kaynakları" },
+    { "slug": "it", "name": "Bilgi Teknolojileri" },
+    { "slug": "sales", "name": "Satış" },
+    { "slug": "finance", "name": "Finans" },
+    { "slug": "operations", "name": "Operasyon" }
+  ],
+  "teams": [
+    { "slug": "hr-recruiting", "department": "hr", "name": "İşe Alım" },
+    { "slug": "it-infrastructure", "department": "it", "name": "Altyapı" },
+    { "slug": "it-helpdesk", "department": "it", "name": "Yardım Masası" },
+    { "slug": "sales-istanbul", "department": "sales", "name": "Satış İstanbul" },
+    { "slug": "sales-europe", "department": "sales", "name": "Satış Avrupa" },
+    { "slug": "finance-accounting", "department": "finance", "name": "Muhasebe" },
+    { "slug": "operations-warehouse", "department": "operations", "name": "Depo" },
+    { "slug": "operations-fleet", "department": "operations", "name": "Filo" }
+  ],
+  "personas": [
+    { "key": "ayse", "name": "Ayşe Yılmaz", "department": "sales", "team": "sales-istanbul", "role": "employee", "auditor": false },
+    { "key": "mehmet", "name": "Mehmet Kaya", "department": "sales", "team": "sales-europe", "role": "team_lead", "auditor": false },
+    { "key": "zeynep", "name": "Zeynep Demir", "department": "sales", "team": null, "role": "department_head", "auditor": false },
+    { "key": "elif", "name": "Elif Şahin", "department": "hr", "team": "hr-recruiting", "role": "employee", "auditor": false },
+    { "key": "hakan", "name": "Hakan Öztürk", "department": "hr", "team": null, "role": "department_head", "auditor": false },
+    { "key": "can", "name": "Can Arslan", "department": "it", "team": "it-helpdesk", "role": "employee", "auditor": false },
+    { "key": "deniz", "name": "Deniz Aydın", "department": "finance", "team": "finance-accounting", "role": "employee", "auditor": false },
+    { "key": "emre", "name": "Emre Çelik", "department": "operations", "team": "operations-fleet", "role": "employee", "auditor": false },
+    { "key": "selin", "name": "Selin Koç", "department": null, "team": null, "role": "executive", "auditor": false },
+    { "key": "burak", "name": "Burak Polat", "department": null, "team": null, "role": "admin", "auditor": false },
+    { "key": "ozan", "name": "Ozan Kurt", "department": "operations", "team": "operations-warehouse", "role": "employee", "auditor": true }
+  ],
+  "emailDomain": "atlas-lojistik.test"
+}

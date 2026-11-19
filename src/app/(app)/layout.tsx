@@ -3,6 +3,10 @@ import { Suspense } from "react";
 import { signOut } from "@/app/login/actions";
 import { requireUser } from "@/lib/auth/session";
 
+// Every page below reads the session per request, so instant-navigation
+// validation has nothing to prerender; opt the segment out of its feedback.
+export const instant = false;
+
 // Authenticated area. The header reads the session, so it streams behind a
 // boundary while the page shell prerenders.
 export default function AppLayout({ children }: LayoutProps<"/">) {

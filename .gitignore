@@ -49,3 +49,5 @@ supabase/.temp/
 supabase/.branches/
 supabase/snippets/
 .cache/
+test-results/
+playwright-report/

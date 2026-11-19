@@ -97,14 +97,14 @@ isOneToOne: false
                   ]
                 },"documents": {
                   Row: {
-                    "allowed_principals": (string)[],"checksum": string | null,"created_at": string,"department_id": string | null,"error": string | null,"id": string,"language": string,"org_id": string,"owner_id": string | null,"scope": Database["public"]['Enums']["doc_scope"],"slug": string,"status": Database["public"]['Enums']["doc_status"],"storage_path": string | null,"superseded_by": string | null,"team_id": string | null,"title": string,"updated_at": string,"version": number
+                    "allowed_principals": (string)[],"checksum": string | null,"chunk_count": number,"created_at": string,"department_id": string | null,"error": string | null,"id": string,"ingested_at": string | null,"injection_flags": (string)[],"language": string,"mime_type": string | null,"org_id": string,"owner_id": string | null,"scope": Database["public"]['Enums']["doc_scope"],"slug": string,"status": Database["public"]['Enums']["doc_status"],"storage_path": string | null,"superseded_by": string | null,"team_id": string | null,"title": string,"updated_at": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "allowed_principals"?: (string)[],"checksum"?: string | null,"created_at"?: string,"department_id"?: string | null,"error"?: string | null,"id"?: string,"language": string,"org_id": string,"owner_id"?: string | null,"scope": Database["public"]['Enums']["doc_scope"],"slug": string,"status"?: Database["public"]['Enums']["doc_status"],"storage_path"?: string | null,"superseded_by"?: string | null,"team_id"?: string | null,"title": string,"updated_at"?: string,"version"?: number
+                    "allowed_principals"?: (string)[],"checksum"?: string | null,"chunk_count"?: number,"created_at"?: string,"department_id"?: string | null,"error"?: string | null,"id"?: string,"ingested_at"?: string | null,"injection_flags"?: (string)[],"language": string,"mime_type"?: string | null,"org_id": string,"owner_id"?: string | null,"scope": Database["public"]['Enums']["doc_scope"],"slug": string,"status"?: Database["public"]['Enums']["doc_status"],"storage_path"?: string | null,"superseded_by"?: string | null,"team_id"?: string | null,"title": string,"updated_at"?: string,"version"?: number
                   }
                   Update: {
-                    "allowed_principals"?: (string)[],"checksum"?: string | null,"created_at"?: string,"department_id"?: string | null,"error"?: string | null,"id"?: string,"language"?: string,"org_id"?: string,"owner_id"?: string | null,"scope"?: Database["public"]['Enums']["doc_scope"],"slug"?: string,"status"?: Database["public"]['Enums']["doc_status"],"storage_path"?: string | null,"superseded_by"?: string | null,"team_id"?: string | null,"title"?: string,"updated_at"?: string,"version"?: number
+                    "allowed_principals"?: (string)[],"checksum"?: string | null,"chunk_count"?: number,"created_at"?: string,"department_id"?: string | null,"error"?: string | null,"id"?: string,"ingested_at"?: string | null,"injection_flags"?: (string)[],"language"?: string,"mime_type"?: string | null,"org_id"?: string,"owner_id"?: string | null,"scope"?: Database["public"]['Enums']["doc_scope"],"slug"?: string,"status"?: Database["public"]['Enums']["doc_status"],"storage_path"?: string | null,"superseded_by"?: string | null,"team_id"?: string | null,"title"?: string,"updated_at"?: string,"version"?: number
                   }
                   Relationships: [
                     {
@@ -265,8 +265,19 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"ingest_ack":
+{ Args: { "p_msg_id": number }; Returns: boolean
+                           },
+"ingest_dequeue":
+{ Args: { "p_qty"?: number,"p_visibility_seconds"?: number }; Returns: {
+              "message": Json,"msg_id": number,"read_ct": number
+            }[]
+                           },
 "log_rag_query":
 { Args: { "p_abstained": boolean,"p_channel": string,"p_citations_invalid": number,"p_cited_chunk_ids": (string)[],"p_cost_usd": number,"p_denied_chunk_ids": (string)[],"p_injection_flags": (string)[],"p_latency_ms": number,"p_model": string,"p_prompt_version": string,"p_query_hash": string,"p_query_redacted": string,"p_retrieved_chunk_ids": (string)[] }; Returns: number
+                           },
+"replace_document_chunks":
+{ Args: { "p_checksum": string,"p_document_id": string,"p_injection_flags": (string)[],"p_sections": Json }; Returns: number
                            }
           }
           Enums: {

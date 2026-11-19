@@ -66,7 +66,10 @@ $$, array[
   'private.document_acl_changed()',
   'private.chunks_before_write()',
   'public.log_rag_query(text, text, text, uuid[], uuid[], uuid[], text, text, text[], boolean, integer, integer, numeric)',
-  'audit.purge_expired()'
+  'audit.purge_expired()',
+  'private.enqueue_ingest()',
+  'public.ingest_dequeue(integer, integer)',
+  'public.ingest_ack(bigint)'
 ], 'security definer functions match the reviewed allowlist');
 
 select is_empty($$
@@ -104,6 +107,18 @@ select ok(
      from pg_indexes where indexname = 'chunks_embedding_hnsw_idx'),
   'HNSW index uses vector_cosine_ops (matches the <=> operator)'
 );
+
+select is_empty($$
+  select policyname from pg_policies
+  where schemaname = 'storage' and tablename = 'objects' and policyname like 'documents_objects_%'
+    and (cmd = 'ALL' or roles <> '{authenticated}'::name[] or qual = 'true' or with_check = 'true')
+$$, 'document bucket policies: per command, authenticated only, never true');
+
+select is_empty($$
+  select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('ingest_dequeue', 'ingest_ack', 'replace_document_chunks')
+    and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))
+$$, 'only the worker (service_role) can dequeue, ack or replace chunks');
 
 select * from finish();
 rollback;

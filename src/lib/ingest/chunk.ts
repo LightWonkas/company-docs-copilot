@@ -127,87 +127,109 @@ export async function chunkMarkdown(markdown: string, opts: ChunkOptions): Promi
   if (current.blocks.length) raw.push(current);
 
   const sections: SectionDraft[] = [];
-  let chunkOrdinal = 0;
-
-  for (const [sectionIndex, section] of raw.entries()) {
-    const basePath = [docTitle, section.heading].filter((x): x is string => Boolean(x));
+  for (const [index, section] of raw.entries()) {
     const sectionText = [section.heading ? `## ${section.heading}` : null, ...section.blocks.map(renderBlock)]
       .filter(Boolean)
       .join("\n\n");
-
-    const chunks: ChunkDraft[] = [];
-    let parts: string[] = [];
-    let subheading: string | null = null;
-    let chunkSubheading: string | null = null;
-
-    const emit = async () => {
-      const text = parts.join("\n\n").trim();
-      if (!text) return;
-      chunks.push({
-        ordinal: chunkOrdinal++,
-        text,
-        tokens: await opts.countTokens(text),
-        headingPath: chunkSubheading ? [...basePath, chunkSubheading] : basePath,
-      });
-      // Overlap comes from prose only; never repeat a table.
-      const last = parts[parts.length - 1];
-      parts = [];
-      if (last && !last.trimStart().startsWith("|")) {
-        const tail = await overlapTail(last, opts);
-        if (tail) parts.push(tail);
-      }
-      chunkSubheading = subheading;
-    };
-
-    for (const block of section.blocks) {
-      if (block.kind === "heading") {
-        subheading = block.text;
-        if (parts.length === 0 || (await opts.countTokens(parts.join("\n\n"))) < opts.minTokens) {
-          chunkSubheading ??= subheading;
-        }
-      }
-      const text = renderBlock(block);
-      const blockTokens = await opts.countTokens(text);
-
-      if (blockTokens > opts.maxTokens && block.kind !== "table" && block.kind !== "code") {
-        for (const piece of await splitOversized(text, opts)) {
-          if (parts.length && (await opts.countTokens([...parts, piece].join("\n\n"))) > opts.maxTokens) await emit();
-          parts.push(piece);
-        }
-        continue;
-      }
-      if (parts.length && (await opts.countTokens([...parts, text].join("\n\n"))) > opts.maxTokens) {
-        await emit();
-      }
-      parts.push(text);
-      chunkSubheading ??= subheading;
-    }
-    await emit();
-
-    // A short tail chunk merges back into its predecessor when it fits.
-    if (chunks.length >= 2) {
-      const last = chunks[chunks.length - 1];
-      const prev = chunks[chunks.length - 2];
-      if (last.tokens < opts.minTokens / 2) {
-        const merged = `${prev.text}\n\n${last.text}`;
-        const mergedTokens = await opts.countTokens(merged);
-        if (mergedTokens <= opts.maxTokens * 1.1) {
-          chunks.splice(chunks.length - 2, 2, { ...prev, text: merged, tokens: mergedTokens });
-          chunkOrdinal--;
-        }
-      }
-    }
-
     sections.push({
-      ordinal: sectionIndex,
-      headingPath: basePath,
+      ordinal: index,
+      headingPath: [docTitle, section.heading].filter((x): x is string => Boolean(x)),
       text: sectionText,
       tokens: await opts.countTokens(sectionText),
-      chunks,
+      chunks: [],
     });
   }
 
-  // Renumber chunks densely after merges.
+  // Pack blocks across H2 boundaries: real documents have many short
+  // sections, and chunks confined to one section end up far below the
+  // 300-token floor. A chunk prefers to end at an H2 once it is big enough,
+  // and belongs (small-to-big parent) to the section it starts in.
+  type Item = { block: Block; section: number };
+  const items: Item[] = raw.flatMap((s, i) => [
+    ...(s.heading ? [{ block: { text: s.heading, kind: "heading" as const, level: 2 }, section: i }] : []),
+    ...s.blocks.map((block) => ({ block, section: i })),
+  ]);
+
+  let parts: string[] = [];
+  let startSection = 0;
+  let startSubheading: string | null = null;
+  let subheading: string | null = null;
+  const tokensOf = (xs: string[]) => opts.countTokens(xs.join("\n\n"));
+
+  const emit = async (withOverlap: boolean) => {
+    const text = parts.join("\n\n").trim();
+    if (text) {
+      const base = sections[startSection]?.headingPath ?? [];
+      sections[startSection]?.chunks.push({
+        ordinal: 0,
+        text,
+        tokens: await opts.countTokens(text),
+        headingPath: startSubheading ? [...base, startSubheading] : base,
+      });
+    }
+    const last = parts[parts.length - 1];
+    parts = [];
+    // Overlap only when continuing the same topic, and never from a table.
+    if (withOverlap && last && !last.trimStart().startsWith("|")) {
+      const tail = await overlapTail(last, opts);
+      if (tail) parts.push(tail);
+    }
+  };
+
+  const begin = (item: Item) => {
+    startSection = item.section;
+    startSubheading = item.block.kind === "heading" && item.block.level === 2 ? null : subheading;
+  };
+
+  for (const item of items) {
+    const { block } = item;
+    const isH2 = block.kind === "heading" && block.level === 2;
+    if (isH2) subheading = null;
+    else if (block.kind === "heading") {
+      subheading = block.text;
+      // An H3 right after the chunk's H2 (no content yet) refines its path.
+      if (parts.every((p) => p.startsWith("#"))) startSubheading = subheading;
+    }
+
+    const text = renderBlock(block);
+    if (isH2 && parts.length && (await tokensOf(parts)) >= opts.minTokens) await emit(false);
+    if (parts.length === 0) begin(item);
+
+    const blockTokens = await opts.countTokens(text);
+    if (blockTokens > opts.maxTokens && block.kind !== "table" && block.kind !== "code") {
+      for (const piece of await splitOversized(text, opts)) {
+        if (parts.length && (await tokensOf([...parts, piece])) > opts.maxTokens) {
+          await emit(true);
+          begin(item);
+        }
+        parts.push(piece);
+      }
+      continue;
+    }
+    if (parts.length && (await tokensOf([...parts, text])) > opts.maxTokens) {
+      await emit(!isH2 && block.kind !== "heading");
+      begin(item);
+    }
+    parts.push(text);
+  }
+  await emit(false);
+
+  // A short final chunk merges back into its predecessor when it fits.
+  const all = sections.flatMap((s) => s.chunks.map((c) => ({ s, c })));
+  if (all.length >= 2) {
+    const last = all[all.length - 1];
+    const prev = all[all.length - 2];
+    if (last.c.tokens < opts.minTokens / 2) {
+      const merged = `${prev.c.text}\n\n${last.c.text}`;
+      const mergedTokens = await opts.countTokens(merged);
+      if (mergedTokens <= opts.maxTokens * 1.1) {
+        prev.c.text = merged;
+        prev.c.tokens = mergedTokens;
+        last.s.chunks.pop();
+      }
+    }
+  }
+
   let n = 0;
   for (const s of sections) for (const c of s.chunks) c.ordinal = n++;
   return sections;

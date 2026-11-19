@@ -33,7 +33,7 @@ export async function requireUser(): Promise<SessionUser> {
     .eq("id", userId)
     .single();
   // Authenticated but not provisioned in any org: treat as signed out.
-  if (!profile) redirect(`${LOGIN_PATH}?error=no_profile`);
+  if (!profile) redirect("/auth/signout?error=no_profile");
 
   return {
     id: profile.id,

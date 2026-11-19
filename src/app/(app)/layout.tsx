@@ -31,6 +31,7 @@ async function Nav() {
       <Link href="/">Ask</Link>
       {isAdmin && <Link href="/admin/documents">Documents</Link>}
       {isAdmin && <Link href="/admin/users">Users</Link>}
+      {isAdmin && <Link href="/admin/search">Search debug</Link>}
       {(isAdmin || user.isAuditor) && <Link href="/admin">Dashboard</Link>}
       {user.isAuditor && <Link href="/admin/audit">Audit log</Link>}
       <span className="ml-auto text-muted-foreground">

@@ -175,3 +175,56 @@ Sources: https://code.claude.com/docs/en/hooks, https://code.claude.com/docs/en/
 ## Notes
 
 - **Prompt injection in fetched docs:** several Supabase doc pages fetched during this check contained text aimed at AI agents, asking them to file a feedback report. It was ignored. This is a live example of indirect prompt injection (OWASP LLM01), the threat this project's ingest screening and answer prompt defend against.
+
+---
+
+## M2–M9 findings (2026-11-20)
+
+### Claude API (`@anthropic-ai/sdk` 1.11.0, verified against installed types and the claude-api reference)
+- **Pricing** (per MTok, first-party):
+  - Sonnet 5.5: $2 input / $10 output, $0.10 cache read
+  - Haiku 5.5: $0.10 / $0.50 (prompts up to 100K tokens)
+  - Opus 5.5: $4 / $20, $0.20 cache read
+  - Used by `src/lib/llm/pricing.ts`.
+- **`thinking: {type: "disabled"}`** returns **400 on Sonnet 5.5 and Opus 5.5**, and `budget_tokens` is removed. Helper calls therefore use `output_config.effort: "low"`, which is portable across models.
+- **Effort defaults:** Opus 5.5 and Haiku 5.5 default to `medium`; Sonnet 5.5 defaults to `high`.
+- **`search_result` content blocks** with `citations: {enabled: true}` return `search_result_location` citations with these fields: `search_result_index`, `source`, `start_block_index`, `end_block_index`, `cited_text`, `title`. The validator accepts `end_block_index` as either exclusive or inclusive.
+- **Citations + `output_config.format` are incompatible** (400). Helpers use `messages.parse` + `zodOutputFormat` (`@anthropic-ai/sdk/helpers/zod`); the answer call uses plain text + citations.
+- **Server-side refusal fallback:** `betas: ["server-side-fallback-2026-07-01"]`, `fallbacks: "default"` on `client.beta.messages.stream`.
+- **Next.js bundling:** the SDK must be in `serverExternalPackages`. Turbopack failed to trace its dynamic import in route handlers, and `/api/chat` returned 500.
+
+### Slack (`@slack/bolt` 5.1.0, `@vercel/slack-bolt` 1.7.5, `@slack/web-api` 8.4.0)
+- `client.agents.sessions.setStatus({channel_id, thread_ts, status})` replaces `assistant.threads.setStatus`.
+- `chat.startStream` / `chat.appendStream({markdown_text})` / `chat.stopStream`.
+- `createHandler(app, receiver)` with `new VercelReceiver({signingSecret})`. `App` takes `deferInitialization: true`.
+
+### MCP (`@modelcontextprotocol/server` 2.4.0, `mcp-handler` 2.4.0)
+- `createMcpHandler(init, {serverInfo})`. `server.registerTool(name, {inputSchema: z.object(...)}, (args, ctx) => …)`. Raw-shape schemas are deprecated.
+- The verified token is at **`ctx.http?.authInfo`**; `extra.authInfo` in v1 moved here.
+- `withMcpAuth(handler, verifyToken, {required, resourceMetadataPath})` returns 401 + RFC 9728 `WWW-Authenticate`. `protectedResourceHandler({authServerUrls})` serves the metadata. Both verified with curl.
+- **Supabase OAuth server, local:** `/auth/v1/.well-known/oauth-authorization-server` publishes `registration_endpoint` (DCR) once `allow_dynamic_registration = true`.
+- **Consent API:**
+  - `supabase.auth.oauth.getAuthorizationDetails(id)` returns details or `{redirect_url}`.
+  - `approveAuthorization` / `denyAuthorization` return `{redirect_url}`.
+  - The client name field is `client.name`.
+
+### transformers.js v4 (verified in this repo)
+- `pipeline("feature-extraction", "Xenova/multilingual-e5-small", {dtype: "q8"})` with `{pooling: "mean", normalize: true}` returns 384-d vectors.
+- `extractor.tokenizer.encode(text)` returns an array (used to measure chunk tokens).
+- **Sizes:**
+  - q8 models: e5-small 113 MB, e5-base ≈ 280 MB, bge-m3 ≈ 570 MB.
+  - First download of e5-small took ≈ 110 s.
+  - ONNX Runtime Linux x64 binary: 45 MB.
+- **onnxruntime-node** postinstall only fetches optional CUDA builds; it is kept disabled in `allowBuilds`.
+
+### promptfoo 0.126.0 (validated with `promptfoo validate`)
+- Custom provider `file://provider.mjs`. The path is **relative to the config file**.
+- Context assertions take `contextTransform: 'context.metadata.retrievedContext'`.
+- **Remote-only red-team plugins:** `indirect-prompt-injection`, `rag-poisoning`, `rag-source-attribution` and `rag-document-exfiltration` generate test cases only through Promptfoo's remote server (verified email). Without that, run `rbac` and the `pii:*` plugins locally.
+
+### Next.js 16 / React 19.3 behaviours hit while building
+- **Supabase auth in prerendering:** `Date.now()` inside Supabase auth during (runtime) prerendering is an error. `createClient()` calls `await connection()` first.
+- **`notFound()` inside a streamed `<Suspense>`** keeps HTTP 200, because headers are already sent. Tests assert on content, not status.
+- **Instant-navigation validation:** it flags session-reading segments. The `(app)` layout sets `export const instant = false`, as the Next docs recommend.
+- **Hidden tabs:** React 19.3 reveals streamed Suspense content on an animation frame. In a hidden browser tab it stays hidden. This is an environment artifact, not an app bug.
+- **CLI v3 `db reset` after `stop`:** `supabase start` after a `stop` restores from a backup and does **not** apply new migrations. Run `supabase db reset` after adding migrations.

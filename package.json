@@ -23,7 +23,9 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "eval": "tsx evals/run.ts",
     "eval:smoke": "tsx evals/run.ts --smoke",
-    "eval:calibrate": "tsx evals/calibrate.ts"
+    "eval:calibrate": "tsx evals/calibrate.ts",
+    "eval:ablate": "tsx evals/ablate.ts",
+    "eval:kappa": "tsx evals/kappa.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.11.0",

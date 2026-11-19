@@ -19,6 +19,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/test-db-on-migration.mjs\"",
             "timeout": 300
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/smoke-eval-on-retrieval.mjs\"",
+            "timeout": 300
           }
         ]
       }

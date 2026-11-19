@@ -31,7 +31,7 @@ jobs:
       - run: pnpm build
 
   db:
-    name: pgTAP (supabase test db)
+    name: pgTAP + RLS mutation test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -43,6 +43,34 @@ jobs:
       # The CLI is a devDependency, so CI runs exactly the version pinned in
       # package.json instead of whatever setup-cli resolves.
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsx scripts/ensure-signing-key.ts
       # Postgres only: pgTAP needs neither Auth nor Storage, and it starts faster.
       - run: pnpm exec supabase db start
       - run: pnpm exec supabase test db
+      - run: pnpm test:mutation
+
+  rag:
+    name: Integration tests + smoke eval (permission & injection gates)
+    runs-on: ubuntu-latest
+    env:
+      # Optional: with a key the smoke eval runs the real answer model and
+      # judge; without one it runs offline-extractive (gates still apply).
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MODEL_CACHE_DIR: .cache/models
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/cache@v6
+        with:
+          path: .cache/models
+          key: models-e5-small-q8-v1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:start
+      - run: pnpm env:local
+      - run: pnpm seed
+      - run: pnpm test:integration
+      - run: pnpm eval:smoke

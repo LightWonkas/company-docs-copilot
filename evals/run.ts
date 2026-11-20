@@ -1,6 +1,9 @@
 // RAG eval harness.
 //   pnpm eval            full golden set + permission suite (all personas) + injection suite
 //   pnpm eval --smoke    50-item smoke set, 4 personas, injection suite (PR gate)
+// With LLM_PROVIDER=openai-compatible the suite is "<suite>-local": its own
+// results history, no README table update, and no paid Anthropic judge unless
+// --judge is passed.
 // Writes evals/results/<timestamp>-<suite>.json, diffs against the previous
 // run of the same suite, updates the README table, and exits non-zero on a
 // CI gate failure.
@@ -14,15 +17,19 @@ import { PERSONAS, permittedChunks, personaSession } from "./lib/personas";
 loadEnv();
 const { answerQuestion } = await import("@/lib/answer/answer");
 const { getAnthropic, models } = await import("@/lib/llm/anthropic");
+const { getLlm } = await import("@/lib/llm/provider");
 const { judgeCorrectness, judgeFaithfulness, JUDGE_VERSION } = await import("./lib/judge");
 
 const smoke = process.argv.includes("--smoke");
-const suite = smoke ? "smoke" : "full";
+const llm = getLlm();
+const local = llm?.provider === "openai-compatible";
+const suite = `${smoke ? "smoke" : "full"}${local ? "-local" : ""}`;
 const db = serviceClient();
 const index = await loadCorpusIndex(db);
 const manifest = readManifest();
-const client = getAnthropic();
-const mode = client ? "llm" : "offline-extractive";
+// The judge is always Claude (Opus). A local-model run must not spend on it by surprise.
+const client = local && !process.argv.includes("--judge") ? null : getAnthropic();
+const mode = local ? `local:${llm.models.answer}` : llm ? "llm" : "offline-extractive";
 const log = (m: string) => process.stdout.write(`${m}\n`);
 
 const permitted = new Map<string, Awaited<ReturnType<typeof permittedChunks>>>();
@@ -162,7 +169,7 @@ const report = {
   suite,
   mode,
   createdAt: new Date().toISOString(),
-  models: client ? { ...models(), judgeVersion: JUDGE_VERSION } : null,
+  models: llm ? { ...llm.models, ...(client ? { judge: models().judge, judgeVersion: JUDGE_VERSION } : {}) } : null,
   dataset: { golden: golden.length, verified: golden.filter((g) => g.verified_by).length },
   retrieval: {
     all: retrievalBy(() => true),
@@ -236,8 +243,8 @@ const table = [
   `| Citation validity | ${pct(report.citations.validity)} | | |`,
   `| Citation precision (gold doc) | ${pct(report.citations.precision)} | | |`,
   `| Citation coverage | ${pct(report.citations.coverage)} | | |`,
-  `| Faithfulness (judge) | ${report.judge ? pct(report.judge.faithfulness) : "not run (no API key)"} | | |`,
-  `| Correctness (judge) | ${report.judge ? pct(report.judge.correctness) : "not run (no API key)"} | | |`,
+  `| Faithfulness (judge) | ${report.judge ? pct(report.judge.faithfulness) : "not run"} | | |`,
+  `| Correctness (judge) | ${report.judge ? pct(report.judge.correctness) : "not run"} | | |`,
   `| Permission leaks | ${report.permission.leaks}/${report.permission.runs}${report.permission.ruleOfThreeUpper != null ? ` (95% upper bound ${(report.permission.ruleOfThreeUpper * 100).toFixed(2)}%)` : ""} | | |`,
   `| Injection ASR | ${report.injection.asr.k}/${report.injection.asr.n} (${pct(report.injection.asr)}) | | |`,
   `| Latency p50 / p95 | ${report.latencyMs.p50} / ${report.latencyMs.p95} ms | | |`,

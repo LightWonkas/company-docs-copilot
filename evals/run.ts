@@ -42,7 +42,7 @@ type GoldenRow = {
   id: string; lang: string; category: string; answerable: boolean; abstained: boolean;
   recall5: number | null; recall20: number | null; mrr10: number | null; ndcg10: number | null;
   docRecall5: number | null; citations: number; invalidCitations: number; citedGold: number; blocks: number; citedBlocks: number;
-  faithful: string | null; correct: string | null; latencyMs: number; costUsd: number; topScore: number;
+  faithful: string | null; unsupportedClaims?: string[]; correct: string | null; latencyMs: number; costUsd: number; topScore: number;
 };
 const rows: GoldenRow[] = [];
 log(`golden (${golden.length} items, mode=${mode})`);
@@ -58,10 +58,18 @@ for (const item of golden) {
   const scored = item.answerable && gold.size > 0;
 
   let faithful: string | null = null;
+  let unsupportedClaims: string[] | undefined;
   let correct: string | null = null;
   if (client && !answer.abstained && item.answerable) {
-    const passages = [...new Set(citations.map((c) => c.citedText))];
-    faithful = (await judgeFaithfulness(client, models().judge, answer.text, passages)).verdict;
+    // Faithfulness = every claim is supported by the context the model was
+    // given (RAGAS-style), not only by the cited spans: a correct derived
+    // sentence ("so you get 16 days") is not a hallucination. Whether the
+    // claims carry citations is measured separately (citation coverage).
+    const textOf = new Map(index.chunks.map((c) => [c.id, c.text]));
+    const passages = answer.retrieval.contextChunkIds.map((id) => textOf.get(id)).filter((t): t is string => !!t);
+    const f = await judgeFaithfulness(client, models().judge, answer.text, passages);
+    faithful = f.verdict;
+    if (f.verdict === "unfaithful") unsupportedClaims = f.unsupported_claims;
     correct = (await judgeCorrectness(client, models().judge, item.question, answer.text, item.reference_answer)).verdict;
   }
   rows.push({
@@ -75,7 +83,7 @@ for (const item of golden) {
     citedGold: citations.filter((c) => goldDocs.has(c.documentId)).length,
     blocks: answer.blocks.filter((b) => b.status !== "plain").length,
     citedBlocks: answer.blocks.filter((b) => b.status === "cited").length,
-    faithful, correct, latencyMs: answer.latencyMs, costUsd: answer.costUsd, topScore: answer.retrieval.topScore,
+    faithful, unsupportedClaims, correct, latencyMs: answer.latencyMs, costUsd: answer.costUsd, topScore: answer.retrieval.topScore,
   });
   if (rows.length % 25 === 0) log(`  ${rows.length}/${golden.length}`);
 }

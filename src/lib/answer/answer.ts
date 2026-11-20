@@ -31,6 +31,8 @@ export type FinalAnswer = {
     reranker: string;
     retrievedChunkIds: string[];
     rankedChunkIds: string[];
+    /** Chunks actually sent to the answer model (after quarantine). */
+    contextChunkIds: string[];
     quarantined: number;
   };
 };
@@ -224,6 +226,7 @@ export async function answerQuestion(
       reranker: retrieval.reranker,
       retrievedChunkIds,
       rankedChunkIds: retrieval.ranked.map((c) => c.chunkId),
+      contextChunkIds: context.map((c) => c.chunkId),
       quarantined: retrieval.results.length - context.length,
     },
   };

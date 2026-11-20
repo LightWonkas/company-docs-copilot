@@ -234,3 +234,17 @@ Sources: https://code.claude.com/docs/en/hooks, https://code.claude.com/docs/en/
 - **Supabase JWT lifetime (1 h) vs long evals:** the full eval (205 golden items, then 660 permission probes) runs longer than an hour. Cached persona sessions failed with `JWT expired`, so `evals/lib/personas.ts` re-signs each persona every 30 min.
 - **Haiku 5.5 as listwise reranker:** it returns coarse scores (mostly 1.0 / 0.9 / 0.5 / 0). That makes the abstention threshold easy to place (0.55), but rank ties are common. The fused (RRF) order breaks them.
 - **Contextual Retrieval at ingest:** 150 chunks across 64 documents, one Haiku call each, with the document prompt-cached. Calls run sequentially within a document, so a full seed with a key takes minutes rather than seconds.
+
+## Local LLM provider (2026-11-20)
+
+### Zod 4.6.7 (`z.toJSONSchema`, checked against the installed package)
+- `z.toJSONSchema(schema, { target: "draft-7" })` emits `additionalProperties: false` and `required` for every `z.object`, which is what OpenAI-style `json_schema` strict mode needs. The `$schema` key is removed before sending.
+- `z.int()` bounds come out as `minimum`/`maximum` (`maximum: 9007199254740991` when unbounded); servers accept it.
+- `z.url({ protocol: /^https?$/ })` rejects `file://` and other schemes (used for `LOCAL_LLM_BASE_URL`).
+
+### Ollama 0.13.5 (OpenAI-compatible `/v1/chat/completions`, verified live on an RTX 4070 Ti SUPER)
+- `response_format: { type: "json_schema", json_schema: { name, schema, strict } }` is accepted; replies parsed with the Zod schemas for rewrite, rerank and screen on qwen2.5:3b.
+- `stream: true` + `stream_options: { include_usage: true }` sends a final chunk with `choices: []` and `usage`.
+- The server's context length comes from `OLLAMA_CONTEXT_LENGTH` (the server-config log line showed `4096` by default). The listwise rerank prompt (25 passages up to 1,500 chars) and the answer prompt (8 chunks) need more: start Ollama with `OLLAMA_CONTEXT_LENGTH=16384`.
+- qwen2.5:32b does not fit in 16 GB VRAM and is partly offloaded to CPU: the first answer took 157 s including the model load, later answers about 8 s.
+- No new npm dependency: the client is plain `fetch` (`src/lib/llm/local.ts`).

@@ -19,8 +19,8 @@ export const RETRIEVAL = {
  * ABSTAIN_THRESHOLD overrides for experiments.
  */
 export const ABSTAIN_THRESHOLDS: Record<string, number> = {
-  // Calibrated 2026-11-20 on golden v1 (contexts on): 2.0% false / 100% true
-  // abstention. Matches the rubric: 0.5 = "related but does not answer".
+  // Calibrated 2026-11-20 on golden v1 (contexts on), two runs: 2.0% and 3.9%
+  // false / 100% true abstention. Matches the rubric: 0.5 = "related but does not answer".
   "haiku-listwise": 0.55,
   voyage: 0.3,
   cohere: 0.3,

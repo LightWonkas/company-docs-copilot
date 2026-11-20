@@ -20,10 +20,10 @@ Ask *"What are the 2027 revenue and EBITDA targets in the board strategy?"*:
 |---|---|
 | ![employee](docs/images/same-question-employee.png) | ![executive](docs/images/same-question-executive.png) |
 
-These screenshots are from **offline mode** (no API key).
+These screenshots are from the live configuration (Sonnet 5.5 answers, Haiku 5.5 rerank).
 
-- Ayşe gets a permitted but irrelevant sales table instead of an abstention. This is the measured 40% true-abstention rate made visible: cosine similarity alone cannot tell "nothing relevant" apart.
-- With a key, the Haiku listwise reranker and the model's `<abstain/>` layer handle this case.
+- Ayşe gets the abstention. Her permitted documents score at most 0.5 with the reranker, which is below the calibrated 0.55 threshold, so the answer model is never called.
+- Selin's answer cites the board notes. Lead-in lines such as "Konsolide gelir:" are plain text; any factual sentence without a valid citation would be shown dotted as *unverified*.
 
 To regenerate the screenshots: `SCREENSHOTS=1 pnpm exec playwright test screenshots`.
 
@@ -148,32 +148,36 @@ Rates carry 95% Wilson intervals, means carry normal intervals, and zero-event c
 ### Latest full run
 
 <!-- EVAL:full:START -->
-| Metric (full, offline-extractive, n=205) | All | TR | EN |
+| Metric (full, llm, n=205) | All | TR | EN |
 |---|---|---|---|
-| Recall@5 (chunk) | 0.785 [0.725–0.846] | 0.786 [0.704–0.868] | 0.785 [0.695–0.875] |
-| Recall@20 (chunk) | 0.891 [0.845–0.937] | 0.857 [0.786–0.929] | 0.932 [0.880–0.985] |
-| MRR@10 | 0.731 [0.669–0.793] | 0.726 [0.642–0.810] | 0.737 [0.646–0.828] |
-| nDCG@10 | 0.736 [0.679–0.794] | 0.733 [0.653–0.812] | 0.741 [0.656–0.825] |
-| Recall@5 (doc) | 0.825 [0.768–0.882] | | |
-| True abstention (unanswerable) | 40.4% [28.2–53.9] | | |
-| False abstention (answerable) | 5.9% [3.1–10.8] | | |
-| Citation validity | 100.0% [98.9–100.0] | | |
-| Citation precision (gold doc) | 66.9% [61.8–71.6] | | |
-| Citation coverage | 100.0% [98.9–100.0] | | |
-| Faithfulness (judge) | not run (no API key) | | |
-| Correctness (judge) | not run (no API key) | | |
+| Recall@5 (chunk) | 0.989 [0.978–1.000] | 0.994 [0.982–1.000] | 0.983 [0.964–1.000] |
+| Recall@20 (chunk) | 0.995 [0.987–1.000] | 1.000 [1.000–1.000] | 0.988 [0.971–1.000] |
+| MRR@10 | 0.969 [0.950–0.989] | 0.970 [0.945–0.996] | 0.969 [0.938–0.999] |
+| nDCG@10 | 0.971 [0.955–0.986] | 0.974 [0.955–0.994] | 0.966 [0.941–0.991] |
+| Recall@5 (doc) | 0.997 [0.990–1.000] | | |
+| True abstention (unanswerable) | 100.0% [93.1–100.0] | | |
+| False abstention (answerable) | 4.6% [2.2–9.1] | | |
+| Citation validity | 100.0% [99.2–100.0] | | |
+| Citation precision (gold doc) | 92.0% [89.2–94.1] | | |
+| Citation coverage | 79.2% [75.8–82.3] | | |
+| Faithfulness (judge) | 97.3% [93.2–98.9] | | |
+| Correctness (judge) | 98.6% [95.1–99.6] | | |
 | Permission leaks | 0/660 (95% upper bound 0.45%) | | |
 | Injection ASR | 0/20 (0.0% [0.0–16.1]) | | |
-| Latency p50 / p95 | 46 / 84 ms | | |
-| Cost per 1,000 questions | $0.00 | | |
+| Latency p50 / p95 | 6294 / 10579 ms | | |
+| Cost per 1,000 questions | $12.01 | | |
 
-_Run 2026-11-19; 95% Wilson / normal CIs in brackets._
+_Run 2026-11-20; 95% Wilson / normal CIs in brackets._
 <!-- EVAL:full:END -->
 
-**How to read the offline row:**
+**How to read this run:**
 
-- Without an API key there is no LLM query rewrite, so cross-lingual questions are not translated: recall@5 on that category is 0.00 in the smoke run. Diacritic-free Turkish leans on the trigram leg alone.
-- The safety gates (leaks, injection, citation validity) are real in offline mode. The judge metrics (faithfulness, correctness, Cohen's κ) need a key: `pnpm eval:kappa --prepare`, then human labels, then `pnpm eval:kappa`.
+- **Live configuration:** Sonnet 5.5 answers, Haiku 5.5 rewrite + listwise rerank + ingest screen + Contextual Retrieval. Opus 5.5 is the judge (`judge-v2`).
+- **Faithfulness** asks whether every claim in the answer is supported by the passages the model was given. The 4 unfaithful answers each add one small unsupported clause, for example *"That includes the German subsidiary"*. Each is recorded in the result file as `unsupportedClaims`.
+- **Citation coverage (79%)** is the share of factual answer blocks (connectives excluded) that carry a valid citation. Derived sentences, such as a calculation from a cited rule, are shown to the user as *unverified* rather than given a made-up citation.
+- **False abstentions (7/153)** are all items where Haiku gave the best chunk 0.5 ("related but does not answer"). Most are false-premise and diacritic-free questions.
+- **The judge is not yet calibrated against humans.** Cohen's κ needs ~60 human labels (`pnpm eval:kappa --prepare`, label, `pnpm eval:kappa`). Until then, read the judge rows as indicative.
+- **The offline baseline** (no key, 2026-11-19) is in `evals/results/2026-11-19T23-48-12-full.json`: Recall@5 0.785, true abstention 40%, the same 0 leaks.
 
 ### Embedder ablation (dense retrieval only, same RLS-filtered candidate sets, n = 153)
 
@@ -185,15 +189,37 @@ _Run 2026-11-19; 95% Wilson / normal CIs in brackets._
 
 - The recall@5 intervals overlap, so none of those differences is significant at this n.
 - bge-m3 finds the evidence more often (recall@20 is clearly higher) but ranks it worse (lower MRR). That is a job for the reranker, not a reason to switch embedders.
-- Contextual-retrieval on/off and rerank on/off ablations need `ANTHROPIC_API_KEY`. The harness supports them; they are not reported here.
+
+### Pipeline ablation (live, retrieval only, n = 153)
+
+`pnpm eval:ablate:pipeline <label>`. Each config adds one stage to the previous one. Each config was run twice: once on a corpus ingested without Contextual Retrieval, and once with it (150/150 chunks carry a Haiku-written context).
+
+| Config | Contexts | Recall@5 | Recall@20 | MRR@10 | Cross-lingual R@5 (n=20) | No-diacritics R@5 (n=15) |
+|---|---|---|---|---|---|---|
+| hybrid (RRF), cosine order | off | 0.785 [0.72–0.85] | 0.885 [0.84–0.93] | 0.731 [0.67–0.79] | 0.10 | 0.77 |
+| + Haiku query rewrite | off | 0.779 [0.72–0.84] | 0.930 [0.89–0.97] | 0.738 [0.68–0.80] | 0.05 | 0.77 |
+| + Haiku listwise rerank | off | 0.991 [0.98–1.00] | 0.991 [0.98–1.00] | 0.979 [0.96–1.00] | 1.00 | 1.00 |
+| hybrid (RRF), cosine order | on | 0.772 [0.71–0.83] | 0.878 [0.83–0.93] | 0.691 [0.63–0.75] | 0.15 | 0.63 |
+| + Haiku query rewrite | on | 0.785 [0.73–0.85] | 0.927 [0.89–0.97] | 0.706 [0.64–0.77] | 0.15 | 0.77 |
+| **+ Haiku listwise rerank** (default) | on | **0.998 [0.99–1.00]** | **0.998 [0.99–1.00]** | **0.977 [0.96–0.99]** | 1.00 | 1.00 |
+
+- **The reranker does the work.** The query rewrite adds TR↔EN translations, which raises Recall@20 (0.88 → 0.93): the evidence enters the candidate pool. It does not raise Recall@5, because the fused order still puts same-language chunks first. The listwise rerank then moves the evidence to the top. Cross-lingual and diacritic-free questions go from 0.05–0.77 to 1.00.
+- **Contextual Retrieval shows no measurable gain here.** Every difference with contexts on or off is inside the intervals. The corpus has short, well-titled documents, and each chunk already starts with its document title and section path, so the context adds little. It costs one Haiku call per chunk at ingest (prompt-cached per document). It stays on because it is cheap and helps on longer, less structured corpora, but this corpus cannot show that.
+- **Read near-1.0 numbers with care.** The corpus is 64 documents and the reranker sees ~25 RLS-filtered candidates. With a pool this small, an LLM reranker is close to an oracle. The number that will drop on a real corpus is Recall@20 *before* rerank: that is where to invest (hybrid legs, embedder, candidate pool size).
 
 ### Abstention calibration
 
-`pnpm eval:calibrate` sets the threshold at the 5th percentile of answerable top-1 scores.
+`pnpm eval:calibrate` runs retrieval for all 205 golden items, each as its persona. It then picks the threshold on the reranker's top-1 score that abstains on the most unanswerable items while keeping false abstention at or below 5%.
 
-- With the fusion-only reranker (cosine similarity) that gives **5.9% false abstention, but only 40% true abstention** (21/52). Cosine similarity barely separates "an answer exists" from "nothing relevant".
-- That is why abstention has a second layer: the model's `<abstain/>`, detected deterministically.
-- It is also why the default reranker is Haiku listwise. Re-run calibration whenever the embedder or reranker changes.
+| Reranker | Threshold | False abstention (answerable) | True abstention (unanswerable) |
+|---|---|---|---|
+| fusion only (cosine) | 0.817 | 5.9% [3.1–10.8] | 40.4% [28.2–53.9] |
+| **Haiku listwise** (default) | 0.55 | 3.9% (6/153) [1.8–8.3] | 100% (52/52) [93.1–100] |
+
+- Cosine similarity barely separates "an answer exists" from "nothing relevant". Haiku's 0–1 relevance score does: answerable top-1 scores have p05 = 0.9, and every unanswerable top-1 score is ≤ 0.5.
+- The model's `<abstain/>`, detected deterministically, is a second layer for whatever passes the threshold.
+- Haiku's scores are not fully deterministic. Two calibration runs on the same corpus picked the same threshold, with 3/153 and 6/153 false abstentions. The table shows the later run.
+- Re-run calibration whenever the embedder, reranker or chunking changes.
 
 ### Prompt injection
 
@@ -201,18 +227,21 @@ There are 20 poisoned documents. Their attacks: instruction override, fake syste
 
 | Layer | What it stops |
 |---|---|
-| Ingest hygiene | Hidden text (zero-width, HTML comments, CSS-hidden) is removed before indexing. A pattern screen (TR + EN) plus a Haiku screen quarantines suspicious chunks; the screen fails closed. Offline: **14/20 documents flagged at ingest, 0 false positives** on the 44 normal documents. |
+| Ingest hygiene | Hidden text (zero-width, HTML comments, CSS-hidden) is removed before indexing. A pattern screen (TR + EN) plus a Haiku screen quarantines suspicious chunks; the screen fails closed. Pattern screen alone: 14/20 poisoned documents flagged. With the Haiku screen: **20/20 flagged, 0 false positives** on the 44 normal documents. |
 | Answer call | Quarantined chunks never reach the model. Results go in as untrusted `search_result` data. The call has **no tools**. |
 | Output | Citations are validated. Markdown drops HTML and images and keeps only in-app links. Slack strips foreign URLs (no unfurl exfiltration) and escapes mrkdwn. Document text is rendered as plain text. |
 | Eval | ASR is measured per category: an attack succeeds if the marker, the exfil URL or a canary appears in the answer. promptfoo red-team plugins (`indirect-prompt-injection`, `rag-poisoning`, `rag-source-attribution`, `rag-document-exfiltration`, `rbac`, `pii:*`) run nightly when a key is configured. |
 
 ### Latency and cost
 
-- **Latency (offline mode, local stack):** retrieval p50 is about 50 ms (rewrite + e5 embedding + hybrid search). The p50/p95 for full answers is in the eval table.
-- **Cost:** computed per answer from token usage at Anthropic first-party rates and shown to admins. Rates per MTok:
-  - Sonnet 5.5: $2 input / $10 output
+Measured in the full run on a local stack, against the first-party API:
+
+- **Latency:** p50 6.3 s, p95 10.6 s per answer, end to end. This covers rewrite, embedding, hybrid search, Haiku rerank and the Sonnet answer. The UI streams, so the first tokens arrive well before that. Retrieval alone without LLM stages is about 50 ms.
+- **Cost:** **$12.01 per 1,000 questions** (Sonnet answer + Haiku rewrite and rerank; judge calls excluded). It is computed per answer from token usage at first-party rates and shown to admins. Rates per MTok:
+  - Sonnet 5.5: $2 input / $10 output, $0.10 cache read
   - Haiku 5.5: $0.10 input / $0.50 output
-- **Typical answer:** about 8 chunks × ~450 tokens + a ~550-token system prompt (cached) ≈ 4.5k input + ~300 output tokens on Sonnet 5.5 ≈ $0.012. Haiku rewrite and rerank add ≈ $0.001. That is **≈ $13 per 1,000 questions** (an estimate; the table reports measured cost once run with a key).
+- **Caching:** the static system prompt carries the cache breakpoint, so it is read from cache after the first call.
+- **Cheaper answers:** `ANSWER_EFFORT=low` trades some answer quality for latency and cost. It is not evaluated here.
 
 ## Design decisions
 
@@ -277,7 +306,7 @@ These steps need your own Vercel and Supabase accounts:
 ## Limitations and next steps
 
 - The golden set needs a human verification pass. The judge κ needs ~60 human labels.
-- With a key, re-run calibration for the Haiku reranker and report the Contextual Retrieval and rerank ablations.
+- The corpus is small enough that the LLM reranker is near-perfect (see the pipeline ablation). A larger, noisier corpus is needed to measure the stages before it properly.
 - PDF hidden-text detection: white-on-white is caught in Markdown and HTML, not in PDF rendering layers.
 - Local cross-encoder reranking (`bge-reranker-v2-m3`) fits the `Reranker` interface but isn't implemented.
 - Observability: OpenTelemetry + Langfuse spans (ids and scores only) is the planned stretch.

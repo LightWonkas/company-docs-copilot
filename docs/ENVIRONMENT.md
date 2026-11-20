@@ -189,6 +189,7 @@ Sources: https://code.claude.com/docs/en/hooks, https://code.claude.com/docs/en/
 - **`thinking: {type: "disabled"}`** returns **400 on Sonnet 5.5 and Opus 5.5**, and `budget_tokens` is removed. Helper calls therefore use `output_config.effort: "low"`, which is portable across models.
 - **Effort defaults:** Opus 5.5 and Haiku 5.5 default to `medium`; Sonnet 5.5 defaults to `high`.
 - **`search_result` content blocks** with `citations: {enabled: true}` return `search_result_location` citations with these fields: `search_result_index`, `source`, `start_block_index`, `end_block_index`, `cited_text`, `title`. The validator accepts `end_block_index` as either exclusive or inclusive.
+- **Multi-block `cited_text` is concatenated with no separator** (observed live, intermittently). Example: blocks `"…2,750 TL per week |"` + `"| On-call allowance (secondary)…"` arrive as `"…per week || On-call…"`. The validator therefore checks containment with all whitespace removed on both sides; a space-joined comparison rejected 2 valid table citations in the smoke run.
 - **Citations + `output_config.format` are incompatible** (400). Helpers use `messages.parse` + `zodOutputFormat` (`@anthropic-ai/sdk/helpers/zod`); the answer call uses plain text + citations.
 - **Server-side refusal fallback:** `betas: ["server-side-fallback-2026-07-01"]`, `fallbacks: "default"` on `client.beta.messages.stream`.
 - **Next.js bundling:** the SDK must be in `serverExternalPackages`. Turbopack failed to trace its dynamic import in route handlers, and `/api/chat` returned 500.
@@ -228,3 +229,8 @@ Sources: https://code.claude.com/docs/en/hooks, https://code.claude.com/docs/en/
 - **Instant-navigation validation:** it flags session-reading segments. The `(app)` layout sets `export const instant = false`, as the Next docs recommend.
 - **Hidden tabs:** React 19.3 reveals streamed Suspense content on an animation frame. In a hidden browser tab it stays hidden. This is an environment artifact, not an app bug.
 - **CLI v3 `db reset` after `stop`:** `supabase start` after a `stop` restores from a backup and does **not** apply new migrations. Run `supabase db reset` after adding migrations.
+
+### Live runs with a key (2026-11-20)
+- **Supabase JWT lifetime (1 h) vs long evals:** the full eval (205 golden items, then 660 permission probes) runs longer than an hour. Cached persona sessions failed with `JWT expired`, so `evals/lib/personas.ts` re-signs each persona every 30 min.
+- **Haiku 5.5 as listwise reranker:** it returns coarse scores (mostly 1.0 / 0.9 / 0.5 / 0). That makes the abstention threshold easy to place (0.55), but rank ties are common. The fused (RRF) order breaks them.
+- **Contextual Retrieval at ingest:** 150 chunks across 64 documents, one Haiku call each, with the document prompt-cached. Calls run sequentially within a document, so a full seed with a key takes minutes rather than seconds.

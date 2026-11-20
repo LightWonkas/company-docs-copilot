@@ -40,17 +40,38 @@ const flag = z
   .optional()
   .transform((v) => v === "true" || v === "1");
 
-const serverEnvSchema = z.object({
-  SUPABASE_SECRET_KEY: z.string().startsWith("sb_secret_").optional(),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  ANSWER_MODEL: z.string().default("claude-sonnet-5-5"),
-  HELPER_MODEL: z.string().default("claude-haiku-5-5"),
-  JUDGE_MODEL: z.string().default("claude-opus-5-5"),
-  // Demo login (password for seeded personas). Off unless explicitly enabled.
-  DEMO_MODE: flag,
-  DEMO_PASSWORD: z.string().min(12).optional(),
-  APP_URL: z.url().default("http://localhost:3100"),
-});
+const serverEnvSchema = z
+  .object({
+    SUPABASE_SECRET_KEY: z.string().startsWith("sb_secret_").optional(),
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    ANSWER_MODEL: z.string().default("claude-sonnet-5-5"),
+    HELPER_MODEL: z.string().default("claude-haiku-5-5"),
+    JUDGE_MODEL: z.string().default("claude-opus-5-5"),
+    // Which model serves answers and helpers. "openai-compatible" is a
+    // company-hosted model (Ollama, vLLM, LM Studio) behind /chat/completions.
+    // The eval judge always stays on Anthropic.
+    LLM_PROVIDER: z.enum(["anthropic", "openai-compatible"]).default("anthropic"),
+    // OpenAI-style base URL including the version prefix, e.g. http://localhost:11434/v1.
+    LOCAL_LLM_BASE_URL: z.url({ protocol: /^https?$/ }).optional(),
+    LOCAL_LLM_MODEL: z.string().min(1).optional(),
+    // Optional smaller model for rewrite/rerank/screen/context; defaults to LOCAL_LLM_MODEL.
+    LOCAL_LLM_HELPER_MODEL: z.string().min(1).optional(),
+    // Only if the server enforces one (vLLM --api-key, a gateway). Not an Anthropic or Supabase key.
+    LOCAL_LLM_API_KEY: z.string().min(1).optional(),
+    LOCAL_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+    // Demo login (password for seeded personas). Off unless explicitly enabled.
+    DEMO_MODE: flag,
+    DEMO_PASSWORD: z.string().min(12).optional(),
+    APP_URL: z.url().default("http://localhost:3100"),
+  })
+  .superRefine((env, ctx) => {
+    // Fail at startup rather than silently falling back to offline mode when
+    // the operator asked for a local model but left it half-configured.
+    if (env.LLM_PROVIDER !== "openai-compatible") return;
+    for (const key of ["LOCAL_LLM_BASE_URL", "LOCAL_LLM_MODEL"] as const) {
+      if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when LLM_PROVIDER=openai-compatible` });
+    }
+  });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

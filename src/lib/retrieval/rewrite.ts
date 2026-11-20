@@ -1,6 +1,6 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { structuredCall, type UsageCost } from "@/lib/llm/anthropic";
+import type { UsageCost } from "@/lib/llm/anthropic";
+import { structuredCall, type HelperLlm } from "@/lib/llm/provider";
 
 export const RewrittenQuery = z.object({
   lang: z.enum(["tr", "en"]),
@@ -31,7 +31,7 @@ export function heuristicRewrite(query: string): RewrittenQuery {
 export async function rewriteQuery(
   query: string,
   history: Turn[],
-  llm: { client: Anthropic; model: string } | null,
+  llm: HelperLlm | null,
 ): Promise<{ rewritten: RewrittenQuery; usage: UsageCost | null; usedLlm: boolean }> {
   if (!llm) return { rewritten: heuristicRewrite(query), usage: null, usedLlm: false };
   const conversation = history

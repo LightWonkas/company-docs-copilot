@@ -12,21 +12,21 @@ import { personaSession } from "./lib/personas";
 
 loadEnv();
 const { retrieve } = await import("@/lib/retrieval/retrieve");
-const { FusionOnlyReranker, HaikuListwiseReranker } = await import("@/lib/retrieval/rerank");
-const { getAnthropic, models } = await import("@/lib/llm/anthropic");
+const { FusionOnlyReranker, LlmListwiseReranker } = await import("@/lib/retrieval/rerank");
+const { getHelperLlm } = await import("@/lib/llm/provider");
 
 const label = process.argv[2] ?? "current";
-const client = getAnthropic();
+const llm = getHelperLlm();
 const index = await loadCorpusIndex(serviceClient());
 const { count: contextCount } = await serviceClient().from("chunks").select("id", { count: "exact", head: true }).not("context", "is", null);
 const golden = readJsonl<GoldenItem>("evals/golden/v1.jsonl").filter((g) => g.answerable);
 
 const configs = [
   { name: "none", llmRewrite: false, reranker: () => new FusionOnlyReranker() },
-  ...(client
+  ...(llm
     ? [
         { name: "rewrite", llmRewrite: true, reranker: () => new FusionOnlyReranker() },
-        { name: "rewrite+rerank", llmRewrite: true, reranker: () => new HaikuListwiseReranker({ client, model: models().helper }) },
+        { name: "rewrite+rerank", llmRewrite: true, reranker: () => new LlmListwiseReranker(llm) },
       ]
     : []),
 ];

@@ -6,18 +6,17 @@ import { loadEnv, serviceClient } from "./lib/local";
 
 loadEnv();
 const { getEmbedder } = await import("../src/lib/embeddings/embedder");
-const { getAnthropic, models } = await import("../src/lib/llm/anthropic");
+const { getHelperLlm } = await import("../src/lib/llm/provider");
 const { drainQueue } = await import("../src/lib/ingest/worker");
 
 const db = serviceClient({ allowRemote: process.argv.includes("--remote") });
-const client = getAnthropic();
 const deps = {
   db,
   embedder: getEmbedder(),
-  llm: client ? { client, model: models().helper } : null,
+  llm: getHelperLlm(),
   log: (m: string) => console.log(`  ${m}`),
 };
-if (!deps.llm) console.log("ANTHROPIC_API_KEY not set: skipping contextual retrieval and the LLM injection screen.");
+if (!deps.llm) console.log("No LLM configured (ANTHROPIC_API_KEY / LLM_PROVIDER): skipping contextual retrieval and the LLM injection screen.");
 
 do {
   const stats = await drainQueue(deps);

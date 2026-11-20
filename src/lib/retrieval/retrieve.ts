@@ -1,5 +1,5 @@
 import { getEmbedder, toVectorLiteral, type Embedder } from "@/lib/embeddings/embedder";
-import { getAnthropic, models } from "@/lib/llm/anthropic";
+import { getHelperLlm } from "@/lib/llm/provider";
 import { foldTurkish } from "@/lib/text/fold";
 import { RETRIEVAL, abstainThreshold, selectReranker } from "./config";
 import type { Reranker } from "./rerank";
@@ -67,8 +67,7 @@ export async function retrieve(session: UserSession, query: string, opts: Retrie
     }
   };
 
-  const client = getAnthropic();
-  const llm = client ? { client, model: models().helper } : null;
+  const llm = getHelperLlm();
   const embedder = opts.embedder ?? getEmbedder();
   const reranker = opts.reranker ?? selectReranker(llm);
 

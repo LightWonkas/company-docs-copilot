@@ -1,5 +1,5 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { CohereReranker, FusionOnlyReranker, HaikuListwiseReranker, VoyageReranker, type Reranker } from "./rerank";
+import type { HelperLlm } from "@/lib/llm/provider";
+import { CohereReranker, FusionOnlyReranker, LlmListwiseReranker, VoyageReranker, type Reranker } from "./rerank";
 
 export const RETRIEVAL = {
   /** RRF constant (k in 1 / (k + rank)). */
@@ -26,20 +26,26 @@ export const ABSTAIN_THRESHOLDS: Record<string, number> = {
   cohere: 0.3,
   // Calibrated 2026-11-20 on golden v1 (e5-small, no contexts): 5.9% false / 40% true abstention.
   none: 0.817,
+  // Local models (LLM_PROVIDER=openai-compatible) key as local-listwise-<model>;
+  // add each one after `pnpm eval:calibrate` (README "Running with a local model").
 };
+
+/** Used for a reranker id that has not been calibrated yet. */
+const UNCALIBRATED_THRESHOLD = 0.5;
 
 export function abstainThreshold(rerankerId: string): number {
   const override = process.env.ABSTAIN_THRESHOLD;
   if (override) return Number(override);
-  return ABSTAIN_THRESHOLDS[rerankerId] ?? 0.5;
+  return ABSTAIN_THRESHOLDS[rerankerId] ?? UNCALIBRATED_THRESHOLD;
 }
 
-export function selectReranker(llm: { client: Anthropic; model: string } | null): Reranker {
-  const choice = process.env.RERANKER ?? (llm ? "haiku-listwise" : "none");
+export function selectReranker(llm: HelperLlm | null): Reranker {
+  // "haiku-listwise" predates local models and means the same as "llm-listwise".
+  const choice = process.env.RERANKER || (llm ? "llm-listwise" : "none");
   if (choice === "voyage" && process.env.VOYAGE_API_KEY) return new VoyageReranker(process.env.VOYAGE_API_KEY);
   if (choice === "cohere" && process.env.COHERE_API_KEY) {
     return new CohereReranker(process.env.COHERE_API_KEY, process.env.COHERE_RERANK_MODEL ?? "rerank-v4.0");
   }
-  if (choice === "haiku-listwise" && llm) return new HaikuListwiseReranker(llm);
+  if ((choice === "llm-listwise" || choice === "haiku-listwise") && llm) return new LlmListwiseReranker(llm);
   return new FusionOnlyReranker();
 }

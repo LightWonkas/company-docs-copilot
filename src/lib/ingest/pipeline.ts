@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Embedder } from "@/lib/embeddings/embedder";
+import type { HelperLlm } from "@/lib/llm/provider";
 import { toVectorLiteral } from "@/lib/embeddings/embedder";
 import type { Database } from "@/lib/supabase/database.types";
 import { foldTurkish } from "@/lib/text/fold";
@@ -19,7 +19,7 @@ import { screenChunk } from "./screen";
 export type IngestDeps = {
   db: SupabaseClient<Database>;
   embedder: Embedder;
-  llm: { client: Anthropic; model: string } | null;
+  llm: HelperLlm | null;
   log?: (message: string) => void;
 };
 

@@ -22,6 +22,7 @@ export function setAnthropicForTesting(fake: Anthropic | null | undefined) {
   client = fake;
 }
 
+/** Anthropic model ids; answers and helpers go through lib/llm/provider.ts, the judge uses `judge`. */
 export function models() {
   const env = getServerEnv();
   return { answer: env.ANSWER_MODEL, helper: env.HELPER_MODEL, judge: env.JUDGE_MODEL };
@@ -30,11 +31,11 @@ export function models() {
 export type UsageCost = { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
 
 /**
- * Helper-model call with a JSON schema enforced by the API (structured
+ * Anthropic side of `structuredCall` (lib/llm/provider.ts): helper-model call with a JSON schema enforced by the API (structured
  * outputs via output_config.format), parsed and re-validated with Zod.
  * Never uses forced tool_choice to get JSON.
  */
-export async function structuredCall<T extends z.ZodType>(args: {
+export async function anthropicStructuredCall<T extends z.ZodType>(args: {
   client: Anthropic;
   model: string;
   schema: T;

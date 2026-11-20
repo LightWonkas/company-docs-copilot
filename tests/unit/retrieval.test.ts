@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it, vi } from "vitest";
 import type { Embedder } from "@/lib/embeddings/embedder";
-import { FusionOnlyReranker, HaikuListwiseReranker } from "@/lib/retrieval/rerank";
+import { FusionOnlyReranker, LlmListwiseReranker } from "@/lib/retrieval/rerank";
 import { retrieve } from "@/lib/retrieval/retrieve";
 import { heuristicRewrite } from "@/lib/retrieval/rewrite";
 import type { UserSession } from "@/lib/retrieval/session";
@@ -75,13 +75,13 @@ describe("retrieve", () => {
   });
 });
 
-describe("HaikuListwiseReranker", () => {
+describe("LlmListwiseReranker", () => {
   it("maps 1-based passage numbers back to ids and scores skipped passages 0", async () => {
     const parse = vi.fn().mockResolvedValue({
       parsed_output: { scores: [{ passage: 2, relevance: 0.9 }] },
       usage: { input_tokens: 1, output_tokens: 1 },
     });
-    const reranker = new HaikuListwiseReranker({ client: { messages: { parse } } as unknown as Anthropic, model: "m" });
+    const reranker = new LlmListwiseReranker({ client: { messages: { parse } } as unknown as Anthropic, model: "m" });
     const scores = await reranker.rerank("q", [
       { id: "a", title: "A", text: "x", vectorSimilarity: 0.9 },
       { id: "b", title: "B", text: "y", vectorSimilarity: 0.8 },

@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { usageOf, type UsageCost } from "@/lib/llm/anthropic";
+import { localTextCall } from "@/lib/llm/local";
+import { isLocalClient, type LlmClient } from "@/lib/llm/provider";
 
 // Contextual Retrieval: a short blurb situating each chunk in its document,
 // indexed together with the chunk (embedding + tsvector) but never shown to
@@ -43,8 +45,14 @@ export function contextRequest(args: {
   };
 }
 
+/** Same prompt for an OpenAI-compatible server (no cache_control; the server's own prefix cache, if any, applies). */
+export function localContextUser(args: { documentTitle: string; documentText: string; chunkText: string; language: "tr" | "en" }): string {
+  const content = contextRequest({ model: "", ...args }).messages[0].content as Anthropic.TextBlockParam[];
+  return content.map((b) => b.text).join("\n");
+}
+
 export async function contextualizeChunks(args: {
-  client: Anthropic;
+  client: LlmClient;
   model: string;
   documentTitle: string;
   documentText: string;
@@ -54,9 +62,16 @@ export async function contextualizeChunks(args: {
   const contexts: (string | null)[] = [];
   const usage: UsageCost[] = [];
   // Sequential on purpose: the first call writes the cache, the rest read it.
+  const { client } = args;
   for (const chunkText of args.chunks) {
     try {
-      const message = await args.client.messages.create(
+      if (isLocalClient(client)) {
+        const reply = await localTextCall({ client, model: args.model, system: CONTEXT_SYSTEM, user: localContextUser({ ...args, chunkText }), maxTokens: 200 });
+        usage.push(reply.usage);
+        contexts.push(sanitizeContext(reply.text));
+        continue;
+      }
+      const message = await client.messages.create(
         contextRequest({ ...args, chunkText }),
       );
       usage.push(usageOf(message.usage));

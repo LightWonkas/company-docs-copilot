@@ -4,7 +4,7 @@
 import { loadEnv } from "./lib/local";
 
 loadEnv();
-const { getAnthropic, models, structuredCall } = await import("../src/lib/llm/anthropic");
+const { getAnthropic, models, anthropicStructuredCall } = await import("../src/lib/llm/anthropic");
 const { RewrittenQuery } = await import("../src/lib/retrieval/rewrite");
 const { buildAnswerRequest } = await import("../src/lib/answer/prompt");
 const { validateAnswer } = await import("../src/lib/answer/citations");
@@ -15,7 +15,7 @@ if (!client) throw new Error("ANTHROPIC_API_KEY is not set");
 const m = models();
 
 const t0 = performance.now();
-const { data: rewrite, usage: ru } = await structuredCall({
+const { data: rewrite, usage: ru } = await anthropicStructuredCall({
   client,
   model: m.helper,
   schema: RewrittenQuery,

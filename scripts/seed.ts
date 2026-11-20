@@ -88,11 +88,11 @@ if (!process.argv.includes("--no-corpus")) {
   const count = await uploadCorpus(db, org.id, spec.emailDomain);
   console.log(`Uploaded ${count} corpus documents; ingesting…`);
   const { getEmbedder } = await import("../src/lib/embeddings/embedder");
-  const { getAnthropic, models } = await import("../src/lib/llm/anthropic");
+  const { getHelperLlm } = await import("../src/lib/llm/provider");
   const { drainQueue } = await import("../src/lib/ingest/worker");
-  const client = process.argv.includes("--no-llm") ? null : getAnthropic();
-  if (!client) console.log("ANTHROPIC_API_KEY not set: no contextual retrieval, pattern-only injection screen.");
-  const stats = await drainQueue({ db, embedder: getEmbedder(), llm: client ? { client, model: models().helper } : null });
+  const llm = process.argv.includes("--no-llm") ? null : getHelperLlm();
+  if (!llm) console.log("No LLM configured (ANTHROPIC_API_KEY / LLM_PROVIDER): no contextual retrieval, pattern-only injection screen.");
+  const stats = await drainQueue({ db, embedder: getEmbedder(), llm });
   const chunks = stats.processed.reduce((n, r) => n + r.chunks, 0);
   const flagged = stats.processed.filter((r) => r.flags.length).length;
   console.log(

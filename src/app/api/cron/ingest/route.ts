@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { getEmbedder } from "@/lib/embeddings/embedder";
 import { drainQueue } from "@/lib/ingest/worker";
-import { getAnthropic, models } from "@/lib/llm/anthropic";
+import { getHelperLlm } from "@/lib/llm/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Vercel Cron entry point for the ingest worker. Runs outside any user
@@ -21,12 +21,11 @@ function authorized(request: NextRequest): boolean {
 
 export async function GET(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const client = getAnthropic();
   const stats = await drainQueue(
     {
       db: createAdminClient(),
       embedder: getEmbedder(),
-      llm: client ? { client, model: models().helper } : null,
+      llm: getHelperLlm(),
     },
     { maxMessages: 10 },
   );

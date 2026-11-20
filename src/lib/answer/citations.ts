@@ -92,9 +92,13 @@ export function validateAnswer(
 
 /** Uncited text that states something (numbers, or a real sentence) is flagged. */
 export function looksFactual(text: string): boolean {
-  const t = text.trim();
-  if (/\d/.test(t)) return true;
-  return t.replace(/[^\p{L}]/gu, "").length > 40;
+  // A line ending in ":" is a lead-in or label ("**Consolidated revenue:**",
+  // "The 2027 targets are:"); it asserts nothing until the cited value after it.
+  return text
+    .split("\n")
+    .map((l) => l.replace(/[*_#>\s-]+/g, " ").trim())
+    .filter((l) => l && !l.endsWith(":"))
+    .some((l) => /\d/.test(l) || l.replace(/[^\p{L}]/gu, "").length > 40);
 }
 
 export const ABSTAIN_TAG = "<abstain/>";

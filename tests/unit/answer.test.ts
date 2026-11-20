@@ -98,6 +98,9 @@ describe("abstention", () => {
   it("looksFactual", () => {
     expect(looksFactual("16 days")).toBe(true);
     expect(looksFactual("and")).toBe(false);
+    // Lead-ins and Markdown labels before a cited value are not claims.
+    expect(looksFactual("2027 hedefleri şöyledir:\n**Konsolide gelir:**\n")).toBe(false);
+    expect(looksFactual("2027 hedefleri şöyledir:\nGelir 8,1 milyar TL")).toBe(true);
   });
 });
 

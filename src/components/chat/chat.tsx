@@ -88,7 +88,7 @@ function Answer({ message, showCost }: { message: ChatMessage; showCost: boolean
               <a href={`/documents/${s.documentId}?chunk=${chunkId}`} className="font-medium text-blue-700">
                 [{s.n}] {s.title}
               </a>
-              <span className="block text-muted-foreground">“{s.citedText[0].slice(0, 200)}”</span>
+              <span className="block text-muted-foreground">“{quoteText(s.citedText[0]).slice(0, 200)}”</span>
             </li>
           ))}
         </ol>
@@ -123,6 +123,19 @@ function Answer({ message, showCost }: { message: ChatMessage; showCost: boolean
       </div>
     </div>
   );
+}
+
+/** Table rows in a source quote read as "cell · cell / cell · cell", not raw pipes. */
+function quoteText(text: string): string {
+  if (!text.includes("|")) return text;
+  return text
+    // The API may join rows without a newline: "...|| next row |".
+    .replace(/\|\s*\|/g, "|\n|")
+    .split("\n")
+    .filter((row) => !/^\s*\|?[\s:|-]+\|?\s*$/.test(row))
+    .map((row) => row.split("|").map((c) => c.trim()).filter(Boolean).join(" · "))
+    .filter(Boolean)
+    .join(" / ");
 }
 
 function SafeMarkdownInline({ text }: { text: string }) {

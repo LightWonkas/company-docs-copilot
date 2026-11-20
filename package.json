@@ -32,6 +32,7 @@
     "eval:redteam": "pnpm dlx promptfoo@0.126.0 redteam run -c evals/promptfoo/promptfooconfig.yaml",
     "test:e2e": "playwright test",
     "llm:check": "tsx scripts/llm-check.ts",
+    "llm:check:local": "tsx scripts/local-llm-check.ts",
     "eval:ablate:pipeline": "tsx evals/ablate-pipeline.ts"
   },
   "dependencies": {

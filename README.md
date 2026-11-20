@@ -323,3 +323,7 @@ These steps need your own Vercel and Supabase accounts:
 | `src/lib/slack/`, `src/lib/mcp/` | Channels, both on the user's JWT |
 | `evals/` | Golden set, permission attacks, harness, ablations, promptfoo |
 | `.claude/` | Skills, review agents and hooks used to build this with Claude Code |
+
+## License
+
+[MIT](LICENSE) © 2026 Emin Özbayraktar. All documents, people and numbers in `seed/` are synthetic.

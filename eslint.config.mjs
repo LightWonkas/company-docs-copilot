@@ -34,7 +34,7 @@ const eslintConfig = defineConfig([
     files: ["src/app/(app)/admin/**", "src/app/api/cron/**", "src/lib/ingest/**", "src/lib/slack/identity.ts", "scripts/**"],
     rules: { "no-restricted-imports": "off" },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "src/lib/supabase/database.types.ts"]),
+  globalIgnores([".claude/worktrees/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "src/lib/supabase/database.types.ts"]),
 ]);
 
 export default eslintConfig;

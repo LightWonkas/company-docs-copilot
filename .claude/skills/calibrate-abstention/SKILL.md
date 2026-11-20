@@ -8,7 +8,7 @@ description: Use after changing the embedder, the reranker, chunking or contextu
 The threshold is per reranker id: `ABSTAIN_THRESHOLDS` in `src/lib/retrieval/config.ts`. Each reranker has its own score scale; for the fusion-only reranker the score is cosine similarity.
 
 1. Make sure the corpus is ingested with the current pipeline (`pnpm seed`). Set the reranker you are calibrating with `RERANKER=haiku-listwise|voyage|cohere|none`.
-2. Run `pnpm eval:calibrate`. It runs retrieval for all 205 golden items, each as its persona. It then sets the threshold at the 5th percentile of top-1 scores on answerable items and reports the true-abstention rate that threshold achieves on unanswerable items. Both rates come with Wilson CIs.
+2. Run `pnpm eval:calibrate`. It runs retrieval for all 205 golden items, each as its persona. It then picks the threshold that abstains on the most unanswerable items while keeping false abstention on answerable items at or below 5%. Both rates come with Wilson CIs.
 3. Update the threshold in `config.ts` with a dated comment giving both rates.
 4. Run `pnpm eval:smoke` and confirm false abstention is about 5% and nothing else regressed.
 

@@ -1,7 +1,7 @@
-// Calibrates the abstention threshold for the active reranker:
-// threshold = 5th percentile of top-1 scores on ANSWERABLE golden items, so at
-// most ~5% of answerable questions are wrongly abstained; reports how many
-// unanswerable items that threshold catches. Re-run whenever the embedder or
+// Calibrates the abstention threshold for the active reranker: among the
+// midpoints between observed top-1 scores, pick the one that abstains on the
+// most UNANSWERABLE items while wrongly abstaining on <= 5% of ANSWERABLE ones
+// (ties: fewest false abstentions). Re-run whenever the embedder or
 // reranker changes.   pnpm eval:calibrate
 import { writeFileSync } from "node:fs";
 import { loadEnv } from "../scripts/lib/local";
@@ -26,7 +26,16 @@ for (const item of golden) {
   (item.answerable ? answerable : unanswerable).push(r.topScore);
 }
 
-const threshold = Number(percentile(answerable, 0.05).toFixed(3));
+const sorted = [...new Set([...answerable, ...unanswerable])].sort((a, b) => a - b);
+const candidates = sorted.slice(1).map((s, i) => (s + sorted[i]) / 2);
+let best = { t: percentile(answerable, 0.05), fa: Infinity, ta: -1 };
+for (const t of candidates) {
+  const fa = answerable.filter((s) => s < t).length;
+  const ta = unanswerable.filter((s) => s < t).length;
+  if (fa / answerable.length > 0.05) continue;
+  if (ta > best.ta || (ta === best.ta && fa < best.fa)) best = { t, fa, ta };
+}
+const threshold = Number(best.t.toFixed(3));
 const falseAbstain = answerable.filter((s) => s < threshold).length;
 const trueAbstain = unanswerable.filter((s) => s < threshold).length;
 const summary = {

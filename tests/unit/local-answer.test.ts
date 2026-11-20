@@ -5,6 +5,7 @@ import {
   buildLocalAnswerRequest,
   formatSearchResults,
   neutralize,
+  normalizeAbstention,
   parseCitationMarkers,
   streamingDisplay,
 } from "@/lib/answer/local";
@@ -133,6 +134,14 @@ describe("parseCitationMarkers (forged or wrong citations are dropped and counte
 describe("parseCitationMarkers (abstention and empty output)", () => {
   it("keeps <abstain/> detectable", () => {
     expect(isModelAbstention(run("<abstain/>").blocks)).toBe(true);
+  });
+
+  it.each(["abstain/", "<abstain>", " [abstain] ", "</abstain>"])("normalizes the bare token %j a small model wrote", (raw) => {
+    expect(normalizeAbstention(raw)).toBe("<abstain/>");
+  });
+
+  it("leaves a real sentence that mentions abstaining alone", () => {
+    expect(normalizeAbstention("You may abstain from the vote.")).toBe("You may abstain from the vote.");
   });
 
   it("returns no text blocks for marker-only output", () => {

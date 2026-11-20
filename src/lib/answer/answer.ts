@@ -9,7 +9,7 @@ import type { UserSession } from "@/lib/retrieval/session";
 import { foldTurkish } from "@/lib/text/fold";
 import { abstentionText } from "./abstain";
 import { ABSTAIN_TAG, isModelAbstention, validateAnswer, type AnswerBlock, type ResponseTextBlock } from "./citations";
-import { LOCAL_PROMPT_VERSION, buildLocalAnswerRequest, parseCitationMarkers, streamingDisplay } from "./local";
+import { LOCAL_PROMPT_VERSION, buildLocalAnswerRequest, normalizeAbstention, parseCitationMarkers, streamingDisplay } from "./local";
 import { PROMPT_VERSION, buildAnswerRequest, toSearchResults, type SentSearchResult } from "./prompt";
 import { queryHash, redactQuery } from "./redact";
 
@@ -130,7 +130,7 @@ async function generateLocal(client: LocalLlmClient, args: GenerateArgs): Promis
       }
     },
   );
-  return { textBlocks: parseCitationMarkers(stripReasoning(text), args.sent), usage };
+  return { textBlocks: parseCitationMarkers(normalizeAbstention(stripReasoning(text)), args.sent), usage };
 }
 
 export async function answerQuestion(

@@ -117,12 +117,12 @@ pnpm seed          # org, 11 personas, 64 documents, ingestion
 pnpm dev           # http://localhost:3100 (click a demo persona)
 ```
 
-Add `ANTHROPIC_API_KEY` to `.env.local` for model answers, Contextual Retrieval, the Haiku reranker and the LLM injection screen. Without it, the app still runs end to end in an **offline-extractive** mode, which quotes the best-matching cited sentences and is labelled as such in the UI.
+Add `ANTHROPIC_API_KEY` to `.env.local` for model answers, Contextual Retrieval, the Haiku reranker and the LLM injection screen, or point the app at a company-hosted model ([Running with a local model](#running-with-a-local-model)). Without either, the app still runs end to end in an **offline-extractive** mode, which quotes the best-matching cited sentences and is labelled as such in the UI.
 
 Checks:
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm test     # 104 unit tests
+pnpm lint && pnpm typecheck && pnpm test     # 170 unit tests
 ```
 ```bash
 pnpm db:test && pnpm test:mutation           # 116 pgTAP tests + 8/8 mutations killed
@@ -133,6 +133,81 @@ pnpm test:integration && pnpm test:e2e       # 20 integration + 6 Playwright tes
 ```bash
 pnpm eval:smoke                               # PR gate; `pnpm eval` for the full suite
 ```
+
+## Running with a local model
+
+Many companies can't send HR or board documents to an external API. With `LLM_PROVIDER=openai-compatible` the whole pipeline runs on a company-hosted model behind an OpenAI-compatible `/chat/completions` endpoint: Ollama, vLLM or LM Studio. That covers query rewrite, listwise rerank, the injection screen, Contextual Retrieval and answers. Embeddings are already local (transformers.js). Claude stays the default, and the eval judge always uses Claude.
+
+### Setup (Ollama)
+
+```bash
+ollama pull qwen2.5:32b
+```
+```bash
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+```
+
+Ollama's default context is 4,096 tokens. The rerank prompt (25 passages) and the answer prompt (8 chunks) don't fit in that, and Ollama cuts long prompts without an error.
+
+Then add to `.env.local`:
+
+```
+LLM_PROVIDER=openai-compatible
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1   # LM Studio :1234/v1, vLLM :8000/v1
+LOCAL_LLM_MODEL=qwen2.5:32b
+LOCAL_LLM_HELPER_MODEL=qwen2.5:7b              # optional; defaults to LOCAL_LLM_MODEL
+LOCAL_LLM_API_KEY=                             # only if the server enforces one (vLLM --api-key)
+LOCAL_LLM_REASONING=false                      # true if the model writes its reasoning before </think> in the answer
+```
+
+`env.ts` refuses to start if the provider is set but the URL or model is missing, and accepts only `http(s)` URLs.
+
+```bash
+pnpm llm:check:local      # every call shape against the local model; no Anthropic calls
+```
+```bash
+pnpm seed                 # re-ingest so contexts and the injection screen use the local helper
+```
+
+### How answers are cited without native citations
+
+A local model has no `search_result` citations, so `src/lib/answer/local.ts` works like this:
+
+1. It numbers the search results and their 1–3 sentence blocks.
+2. It asks for a marker after each claim: `[[S:B|exact quote]]` (search result, block or block range, verbatim quote).
+3. It parses the markers into the same `search_result_location` shape the Anthropic API returns. The quote must be a whole-word span of at least four letters or digits in the cited blocks, and the UI shows the document's own text for it, not the model's string.
+4. The unchanged `validateAnswer` then checks the index, the permitted-chunk set for this request, and that the quote really is in those blocks.
+
+A malformed, forged or truncated marker is dropped and counted as an invalid citation, never shown as a source. Document text can't fake the prompt structure, pre-write markers or use chat-template tokens such as `<|im_start|>` to open its own system turn. Those tokens are neutralized in everything sent to the local server and flagged at ingest. The answer call still has no tools, and `<abstain/>` still means abstain.
+
+Nothing about permissions changes. Retrieval runs on the user's JWT under RLS, the local endpoint only receives chunks the user can already read, and the secret key stays out of the chat path.
+
+### Calibrate abstention for your model
+
+The abstention threshold is a property of the reranker's score distribution, so each local model gets its own reranker id, `local-listwise-<model>` (e.g. `local-listwise-qwen2.5-32b`). Until it is calibrated it falls back to 0.5.
+
+```bash
+pnpm eval:calibrate       # with LLM_PROVIDER=openai-compatible; writes evals/results/calibration-local-listwise-<model>.json
+```
+
+Add the printed value to `ABSTAIN_THRESHOLDS` in `src/lib/retrieval/config.ts`, or set `ABSTAIN_THRESHOLD` for the deployment. Recalibrate after changing the model, its quantization or the embedder.
+
+### Evals on a local model
+
+`pnpm eval:smoke` with the local provider writes the suite as `smoke-local`. It has its own results history, leaves the README table alone, and skips the paid Claude judge unless you pass `--judge`. The deterministic metrics still run: retrieval, abstention, citation validity, permission leaks and injection ASR.
+
+### Expected trade-offs
+
+- **Citations.** Claude's native citations can't point at text it wasn't given. Local markers can be wrong, and a wrong one is dropped, so the claim shows as *unverified* (dotted). Expect citation validity below 100% and lower coverage. The `citation validity < 100%` CI gate is kept on purpose, so a local smoke run that drops markers fails it and shows by how much.
+- **Model size.** Live on an RTX 4070 Ti SUPER (16 GB):
+  - qwen2.5:32b cited a Turkish answer with a correct verbatim quote and abstained on an unanswerable question.
+  - qwen2.5:3b handled the structured helpers (rewrite, rerank, screen, context), but in the answer it copied prompt text into a quote and abstained on an answerable question.
+
+  Use ≥ 14B models for answers. A small model is fine as `LOCAL_LLM_HELPER_MODEL`.
+- **Language.** Small models drift into English on Turkish questions more often than Claude.
+- **Latency.** A model that doesn't fit in VRAM is partly offloaded to CPU. The first 32B answer took 157 s including the model load, later ones about 8 s. The listwise rerank is one call over 25 passages and dominates the request time on CPU-offloaded models. A local `pnpm eval:smoke` on qwen2.5:3b took about 36 minutes for the 50 golden items alone (~40 s per question, mostly the rerank). The permission suite adds 240 answer calls, so budget a few hours or run it on a bigger GPU. Its leak checks don't depend on the provider: retrieval runs under RLS whichever model writes the answer.
+- **Injection screen.** It fails closed on a local model too: an unreachable server or a non-conforming reply flags the chunk for review. A weak model may flag more ordinary text.
+- **Cost.** Token counts are logged as usual and the API cost shows $0; the GPU is the cost.
 
 ## Evaluation
 
@@ -246,7 +321,7 @@ Measured in the full run on a local stack, against the first-party API:
 ## Design decisions
 
 - **RLS vs prompt filtering.** Filtering in the prompt ("only use documents for HR") asks the model to enforce security; one injection undoes it. With RLS the model never *receives* what the user can't read, and the guarantee is testable (pgTAP + mutation test).
-- **Native citations vs `[1]` markers.** Hand-rolled markers are free text the model can invent. With `search_result` blocks the API returns structured locations (index, source, block range, cited text), which code then checks against what was sent and what the user may see.
+- **Native citations vs `[1]` markers.** Hand-rolled markers are free text the model can invent. With `search_result` blocks the API returns structured locations (index, source, block range, cited text), which code then checks against what was sent and what the user may see. The local-model path is the one exception, because local models have no native citations. Its markers carry a block range and a verbatim quote, and they go through the same validator, so a bare `[1]` still proves nothing and is never shown as a source.
 - **Hybrid + Turkish FTS + trigram.**
   - Turkish is agglutinative: `izinlerimizden` should match `izin`. Postgres `turkish` stemming handles that.
   - Employees often type without diacritics (`sirket`), which ASCII-folded trigram handles.
@@ -296,6 +371,7 @@ These steps need your own Vercel and Supabase accounts:
 
 - **Legal basis and DPIA.** Processing employee questions and HR documents requires a documented legal basis and a data-protection impact assessment. Register in VERBİS where required.
 - **Cross-border transfer (KVKK Art. 9).** Sending document excerpts and questions to an LLM API outside Türkiye is a transfer abroad. It needs an approved mechanism (standard contract notified to the Authority, or another Art. 9 basis). Evaluate EU/regional processing and zero-data-retention options; keep restricted HR data out of scope unless covered.
+- **On-prem option.** With `LLM_PROVIDER=openai-compatible` and a model hosted in Türkiye, no question or excerpt leaves the company's network, which removes the Art. 9 transfer for answering. The eval judge still uses Claude; run it only on synthetic data.
 - **Transparency.** Tell employees they are talking to an AI, what is logged, and for how long.
 - **Retention and destruction.**
   - The audit log stores ids, scores and redacted and hashed queries. `audit.purge_expired()` enforces `audit.settings.retention_days` (default 365).
@@ -319,6 +395,7 @@ These steps need your own Vercel and Supabase accounts:
 | `supabase/tests/` | pgTAP suites (`scripts/mutation-test.ts` proves they catch leaks) |
 | `src/lib/retrieval/` | `retrieve()`, query rewrite, rerankers, calibrated thresholds |
 | `src/lib/answer/` | Answer call, citation validator, abstention, redaction |
+| `src/lib/llm/` | Provider switch (Claude or a local OpenAI-compatible model), structured helper calls, pricing |
 | `src/lib/ingest/` | Extraction, hygiene, chunking, contextualization, worker |
 | `src/lib/slack/`, `src/lib/mcp/` | Channels, both on the user's JWT |
 | `evals/` | Golden set, permission attacks, harness, ablations, promptfoo |

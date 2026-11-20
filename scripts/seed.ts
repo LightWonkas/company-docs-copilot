@@ -3,6 +3,7 @@
 // This is an admin job, so it uses the secret key; it refuses non-local hosts.
 //   --no-reset   keep the current database
 //   --no-corpus  personas only
+//   --no-llm     ingest without Contextual Retrieval / LLM screen (ablation baseline)
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { uploadCorpus } from "./lib/corpus";
@@ -89,7 +90,7 @@ if (!process.argv.includes("--no-corpus")) {
   const { getEmbedder } = await import("../src/lib/embeddings/embedder");
   const { getAnthropic, models } = await import("../src/lib/llm/anthropic");
   const { drainQueue } = await import("../src/lib/ingest/worker");
-  const client = getAnthropic();
+  const client = process.argv.includes("--no-llm") ? null : getAnthropic();
   if (!client) console.log("ANTHROPIC_API_KEY not set: no contextual retrieval, pattern-only injection screen.");
   const stats = await drainQueue({ db, embedder: getEmbedder(), llm: client ? { client, model: models().helper } : null });
   const chunks = stats.processed.reduce((n, r) => n + r.chunks, 0);

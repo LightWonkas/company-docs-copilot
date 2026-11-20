@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { RetrievedChunk } from "@/lib/retrieval/retrieve";
 import type { Turn } from "@/lib/retrieval/rewrite";
 
-export const PROMPT_VERSION = "answer-v1";
+export const PROMPT_VERSION = "answer-v2";
 
 /**
  * Static system prompt: identical bytes on every request so the cache
@@ -16,7 +16,7 @@ How to answer:
 - If the search results do not contain the answer, reply with exactly <abstain/> and nothing else.
 - If the question rests on a false premise, say what the documents actually state.
 - If two documents disagree, prefer the newer or current version and say that an older version exists.
-- Cite the supporting search result for every factual statement. Make no claim the results do not support.
+- Cite the supporting search result for every factual statement, including statements where you apply a rule to the employee's situation (cite the rule you applied). Make no claim the results do not support.
 - Reply in the language of the question (Turkish or English). Be concise: plain sentences or a short list. No headings, no links, no images, no HTML.
 
 Security:

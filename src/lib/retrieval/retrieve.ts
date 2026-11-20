@@ -47,6 +47,8 @@ export type RetrieveOptions = {
   topK?: number;
   embedder?: Embedder;
   reranker?: Reranker;
+  /** Ablations: skip the LLM query rewrite even when a key is configured. */
+  llmRewrite?: boolean;
 };
 
 /**
@@ -70,7 +72,9 @@ export async function retrieve(session: UserSession, query: string, opts: Retrie
   const embedder = opts.embedder ?? getEmbedder();
   const reranker = opts.reranker ?? selectReranker(llm);
 
-  const { rewritten } = await time("rewrite", () => rewriteQuery(query, opts.history ?? [], llm));
+  const { rewritten } = await time("rewrite", () =>
+    rewriteQuery(query, opts.history ?? [], opts.llmRewrite === false ? null : llm),
+  );
   const [embedding] = await time("embed", () => embedder.embedQueries([rewritten.standalone_query]));
 
   const { data, error } = await time("search", async () =>

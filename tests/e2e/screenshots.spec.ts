@@ -15,6 +15,8 @@ for (const [file, persona] of [
     await loginAs(page, persona);
     await ask(page, QUESTION);
     await expect(page.locator("main section .text-xs.text-muted-foreground").last()).toBeVisible();
+    // The Next.js dev-tools badge is not part of the app.
+    await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
     await page.waitForTimeout(500);
     await page.screenshot({ path: `docs/images/${file}` });
   });

@@ -32,7 +32,12 @@ export function resolveLlm(env: ServerEnv, anthropic: () => Anthropic | null = g
     if (!env.LOCAL_LLM_BASE_URL || !env.LOCAL_LLM_MODEL) return null;
     return {
       provider: "openai-compatible",
-      client: new LocalLlmClient({ baseUrl: env.LOCAL_LLM_BASE_URL, apiKey: env.LOCAL_LLM_API_KEY, timeoutMs: env.LOCAL_LLM_TIMEOUT_MS }),
+      client: new LocalLlmClient({
+        baseUrl: env.LOCAL_LLM_BASE_URL,
+        apiKey: env.LOCAL_LLM_API_KEY,
+        timeoutMs: env.LOCAL_LLM_TIMEOUT_MS,
+        reasoning: env.LOCAL_LLM_REASONING,
+      }),
       models: { answer: env.LOCAL_LLM_MODEL, helper: env.LOCAL_LLM_HELPER_MODEL ?? env.LOCAL_LLM_MODEL },
     };
   }

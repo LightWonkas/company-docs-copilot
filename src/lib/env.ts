@@ -59,6 +59,9 @@ const serverEnvSchema = z
     // Only if the server enforces one (vLLM --api-key, a gateway). Not an Anthropic or Supabase key.
     LOCAL_LLM_API_KEY: z.string().min(1).optional(),
     LOCAL_LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+    // Reasoning models whose chat template opens <think> (vLLM without a
+    // reasoning parser): answers stream only after "</think>".
+    LOCAL_LLM_REASONING: flag,
     // Demo login (password for seeded personas). Off unless explicitly enabled.
     DEMO_MODE: flag,
     DEMO_PASSWORD: z.string().min(12).optional(),

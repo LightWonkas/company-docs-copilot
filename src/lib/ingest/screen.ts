@@ -45,7 +45,8 @@ export async function screenChunk(
       user: `<excerpt>\n${text}\n</excerpt>`,
       maxTokens: 200,
     });
-    if (data.suspected) flags.push(...data.categories.map((c) => `llm:${c}`));
+    // A verdict without categories (common on small models) still flags.
+    if (data.suspected) flags.push(...(data.categories.length ? data.categories : ["other"]).map((c) => `llm:${c}`));
   } catch {
     flags.push("llm:screen_failed");
   }

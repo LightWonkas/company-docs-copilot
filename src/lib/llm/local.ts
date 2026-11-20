@@ -37,23 +37,42 @@ const ChatResponse = z.object({
 
 export type StreamResult = { text: string; usage: UsageCost; finishReason: string | null };
 
+/**
+ * Chat-template control tokens (ChatML, Llama 3, Mistral, Gemma). Servers that
+ * render the template as text (llama.cpp/Ollama, vLLM) may parse these as real
+ * special tokens, so a document containing "<|im_start|>system" could open
+ * its own system turn. Anthropic's API has no such channel.
+ */
+export function neutralizeControlTokens(text: string): string {
+  return text
+    .replace(/<\|/g, "‹|")
+    .replace(/\|>/g, "|›")
+    .replace(/\[(\/?INST)\]/gi, "[ $1]")
+    .replace(/<(\/?s|start_of_turn|end_of_turn)>/gi, "‹$1>");
+}
+
 export class LocalLlmClient {
   readonly provider = "openai-compatible";
+  /** The model writes reasoning before "</think>" in its content (template-opened <think>). */
+  readonly reasoning: boolean;
   private readonly endpoint: string;
 
   constructor(
-    private readonly opts: { baseUrl: string; apiKey?: string; timeoutMs: number; fetch?: typeof fetch },
+    private readonly opts: { baseUrl: string; apiKey?: string; timeoutMs: number; reasoning?: boolean; fetch?: typeof fetch },
   ) {
     this.endpoint = `${opts.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    this.reasoning = opts.reasoning ?? false;
   }
 
   private async post(body: ChatRequest): Promise<Response> {
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (this.opts.apiKey) headers.authorization = `Bearer ${this.opts.apiKey}`;
+    // Every non-system message carries untrusted text (documents, questions, history).
+    const messages = body.messages.map((m) => (m.role === "system" ? m : { ...m, content: neutralizeControlTokens(m.content) }));
     const res = await (this.opts.fetch ?? fetch)(this.endpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, messages }),
       signal: AbortSignal.timeout(this.opts.timeoutMs),
     });
     // Status only: an error body may echo the prompt, i.e. document text.

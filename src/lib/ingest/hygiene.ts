@@ -47,6 +47,8 @@ const PATTERNS: { flag: string; re: RegExp }[] = [
   { flag: "secret_fishing", re: /\b(list|print|reveal|output|show|repeat|include)\b[^.\n]{0,80}\b(CANARY|canary tokens?|control numbers?|secret tokens?)/i },
   // Turkish puts the verb last: "... kontrol numaralarını listele".
   { flag: "secret_fishing", re: /(CANARY|kontrol (no|numara)\p{L}*)[^.\n]{0,60}(listele|yaz|göster|paylaş)/iu },
+  // Chat-template special tokens have no business in a business document.
+  { flag: "chat_template_token", re: /<\|[a-z_]{2,30}\|>|\[\/?INST\]|<(start|end)_of_turn>/i },
   { flag: "fake_tool_call", re: /<\/?(function_calls|invoke|tool_use|antml)[^>]*>|"tool_calls?"\s*:/i },
   { flag: "encoded_payload", re: /\b(base64|decode (this|the following|it))\b[\s\S]{0,250}[A-Za-z0-9+/]{40,}={0,2}/i },
   { flag: "citation_manipulation", re: /\b(always|only) cite (this|me)\b|\bher zaman bu (belgeyi|dokümanı) (kaynak|referans)/i },

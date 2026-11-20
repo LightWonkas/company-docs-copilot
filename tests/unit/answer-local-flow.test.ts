@@ -21,7 +21,7 @@ vi.mock("@/lib/retrieval/retrieve", () => ({
 }));
 
 /** An OpenAI-compatible server that streams `content` in small pieces. */
-function streamingServer(content: string) {
+function streamingServer(content: string, reasoning = false) {
   const bodies: Record<string, unknown>[] = [];
   const fetch = vi.fn(async (_url: string, init: RequestInit) => {
     bodies.push(JSON.parse(String(init.body)));
@@ -35,7 +35,7 @@ function streamingServer(content: string) {
   });
   setLlmForTesting({
     provider: "openai-compatible",
-    client: new LocalLlmClient({ baseUrl: "http://local/v1", timeoutMs: 1000, fetch: fetch as unknown as typeof globalThis.fetch }),
+    client: new LocalLlmClient({ baseUrl: "http://local/v1", timeoutMs: 1000, reasoning, fetch: fetch as unknown as typeof globalThis.fetch }),
     models: { answer: "local-answer", helper: "local-helper" },
   });
   return bodies;
@@ -82,6 +82,23 @@ describe("answerQuestion with a local model", () => {
     expect(a.abstained).toBe(true);
     expect(a.abstainReason).toBe("model");
     expect(events.some((e) => e.type === "delta" && e.text.includes("abstain"))).toBe(false);
+  });
+
+  it("never streams template-opened reasoning when LOCAL_LLM_REASONING is set", async () => {
+    streamingServer("The user asks about leave, block 1 says 16.</think>You get 16 days. [[1:1|Employees get 16 days.]]", true);
+    const events: AnswerEvent[] = [];
+    const a = await answerQuestion(session().session, { question: "q", persist: false }, (e) => events.push(e));
+    const streamed = events.flatMap((e) => (e.type === "delta" ? [e.text] : [])).join("");
+    expect(streamed).toBe("You get 16 days.");
+    expect(a.text).toBe("You get 16 days.");
+    expect(a.blocks[0].status).toBe("cited");
+  });
+
+  it("flushes text that streaming held back, so Slack gets the whole answer", async () => {
+    streamingServer("Per diem is 1,250 TL [[2:1|1,250 TL]] for a < b");
+    const events: AnswerEvent[] = [];
+    const a = await answerQuestion(session().session, { question: "q", persist: false }, (e) => events.push(e));
+    expect(events.flatMap((e) => (e.type === "delta" ? [e.text] : [])).join("")).toBe(a.text);
   });
 
   it("abstains when the model writes only markers", async () => {

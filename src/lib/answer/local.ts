@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatRequest } from "@/lib/llm/local";
+import { neutralizeControlTokens, type ChatMessage, type ChatRequest } from "@/lib/llm/local";
 import type { Turn } from "@/lib/retrieval/rewrite";
 import { ABSTAIN_TAG, type ResponseTextBlock } from "./citations";
 import { ANSWER_SYSTEM, PROMPT_VERSION, type SentSearchResult } from "./prompt";
@@ -33,7 +33,7 @@ export const LOCAL_ANSWER_SYSTEM = `${ANSWER_SYSTEM}\n\n${LOCAL_CITATION_RULES}`
  * match the original blocks; a quote across a neutralized spot fails closed.
  */
 export function neutralize(text: string): string {
-  return text
+  return neutralizeControlTokens(text)
     .replace(/<(\/?)(search_results?|block|question)\b/gi, "‹$1$2")
     .replace(/\[\[/g, "[ [")
     .replace(/\]\]/g, "] ]");
@@ -87,6 +87,38 @@ type RawCitation = Record<string, unknown>;
 /** A marker we could not read: validateAnswer counts it as invalid. */
 const MALFORMED: RawCitation = { type: "malformed_marker" };
 
+/** A quote that is not a whole-word span of at least MIN_QUOTE_CHARS letters/digits of the cited blocks. */
+const UNSUPPORTED: RawCitation = { type: "unsupported_quote" };
+const MIN_QUOTE_CHARS = 4;
+const collapse = (s: string) => s.replace(/\s+/g, " ").trim();
+// Per character, so a fold that changes length (Turkish "İ" -> "i̇") keeps indices aligned.
+const fold = (s: string) => Array.from(s, (c) => (c.toLowerCase().length === c.length ? c.toLowerCase() : c)).join("");
+const WORD = /[\p{L}\p{N}]/u;
+
+/**
+ * Where the native path gets cited_text from the API, here the model writes
+ * it, so the shared validator's whitespace-free substring check is too loose
+ * on its own ("is not" would match "notable", "e" matches anything). The quote
+ * must be a whole-word span of the cited blocks, and the span shown to the
+ * user is the document's own text, not the model's string.
+ */
+export function locateQuote(quote: string, blocks: string[]): string | null {
+  if ((quote.match(/[\p{L}\p{N}]/gu) ?? []).length < MIN_QUOTE_CHARS) return null;
+  const source = collapse(blocks.join(" "));
+  const haystack = fold(source);
+  const needle = fold(collapse(quote));
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+    const before = haystack[at - 1];
+    const after = haystack[at + needle.length];
+    const startsWord = WORD.test(needle[0]);
+    const endsWord = WORD.test(needle[needle.length - 1]);
+    if ((!startsWord || !before || !WORD.test(before)) && (!endsWord || !after || !WORD.test(after))) {
+      return source.slice(at, at + needle.length);
+    }
+  }
+  return null;
+}
+
 function toCitation(body: string, sent: SentSearchResult[]): RawCitation {
   const m = MARKER_BODY.exec(body);
   if (!m) return MALFORMED;
@@ -95,6 +127,10 @@ function toCitation(body: string, sent: SentSearchResult[]): RawCitation {
   const index = Number(m[1]) - 1;
   const start = Number(m[2]) - 1;
   const end = m[3] === undefined ? start : Number(m[3]) - 1;
+  const result = sent[index];
+  // Range errors are left to validateAnswer; only a resolvable range is searched.
+  const span = result && start >= 0 && end >= start ? locateQuote(quote, result.blocks.slice(start, end + 1)) : null;
+  if (result && start >= 0 && end >= start && end < result.blocks.length && span === null) return UNSUPPORTED;
   return {
     type: "search_result_location",
     search_result_index: index,
@@ -103,7 +139,7 @@ function toCitation(body: string, sent: SentSearchResult[]): RawCitation {
     source: sent[index]?.source,
     start_block_index: start,
     end_block_index: end,
-    cited_text: quote,
+    cited_text: span ?? quote,
   };
 }
 
@@ -156,12 +192,15 @@ function lastClosedEnd(text: string): number {
  * The final, validated blocks replace this text anyway.
  */
 export function streamingDisplay(raw: string): string {
-  let text = raw.replace(MARKER, "");
+  // Same whitespace rule as parseCitationMarkers (space before a marker goes),
+  // so the streamed text is always a prefix of the final text.
+  let text = raw.replace(/\s*\[\[[\s\S]*?\]\]/g, "");
   const open = text.indexOf("[[");
   if (open !== -1) text = text.slice(0, open);
   else if (text.endsWith("[")) text = text.slice(0, -1);
   // A tag still being written ("<thi" of "<think>") resolves on a later delta.
   const lt = text.lastIndexOf("<");
   if (lt !== -1 && text.length - lt <= 10 && !text.includes(">", lt)) text = text.slice(0, lt);
-  return text;
+  // Trailing whitespace may turn out to precede a marker.
+  return text.trimEnd();
 }

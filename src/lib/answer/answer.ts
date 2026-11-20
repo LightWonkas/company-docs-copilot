@@ -118,19 +118,26 @@ async function generateLocal(client: LocalLlmClient, args: GenerateArgs): Promis
   const onText = deltaEmitter(args.emit);
   let raw = "";
   let shown = "";
+  // Append-only: Slack keeps every streamed chunk, so nothing shown may later change.
+  const show = (display: string) => {
+    if (display.length > shown.length && display.startsWith(shown)) {
+      onText(display.slice(shown.length));
+      shown = display;
+    }
+  };
   const { text, usage } = await client.stream(
     buildLocalAnswerRequest({ model: args.model, question: args.question, results: args.sent, history: args.history }),
     (delta) => {
       raw += delta;
-      const display = streamingDisplay(stripReasoning(raw));
-      // Stream only append-only growth; the validated final blocks replace it anyway.
-      if (display.length > shown.length && display.startsWith(shown)) {
-        onText(display.slice(shown.length));
-        shown = display;
-      }
+      // Without an opening tag, reasoning is indistinguishable from the answer until "</think>".
+      if (client.reasoning && !raw.includes("</think>")) return;
+      show(streamingDisplay(stripReasoning(raw)));
     },
   );
-  return { textBlocks: parseCitationMarkers(normalizeAbstention(stripReasoning(text)), args.sent), usage };
+  const textBlocks = parseCitationMarkers(normalizeAbstention(stripReasoning(text)), args.sent);
+  // Whatever streaming held back (a trailing partial tag, or all of it).
+  show(textBlocks.map((b) => b.text).join(""));
+  return { textBlocks, usage };
 }
 
 export async function answerQuestion(

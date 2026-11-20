@@ -21,7 +21,11 @@ export type ResponseTextBlock = {
   citations?: Array<Record<string, unknown>> | null;
 };
 
-const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+
+// The API concatenates the cited blocks with no separator ("…week |" +
+// "| On-call…" becomes "…week || On-call…"), so containment is checked with
+// all whitespace removed on both sides.
+const squash = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
 /**
  * Deterministic citation validation. A citation survives only if:
@@ -66,8 +70,8 @@ export function validateAnswer(
         c.end_block_index >= c.start_block_index &&
         c.start_block_index < result.blocks.length &&
         // end may be exclusive or inclusive; take the wider range.
-        norm(result.blocks.slice(c.start_block_index, c.end_block_index + 1).join(" ")).includes(norm(c.cited_text ?? "")) &&
-        norm(c.cited_text ?? "").length > 0;
+        squash(result.blocks.slice(c.start_block_index, c.end_block_index + 1).join("")).includes(squash(c.cited_text ?? "")) &&
+        squash(c.cited_text ?? "").length > 0;
 
       if (!ok || !permittedChunkIds.has(result.chunkId)) {
         invalid++;

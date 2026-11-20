@@ -4,8 +4,21 @@ import { userSessionFromAccessToken, type UserSession } from "@/lib/retrieval/se
 
 export const PERSONAS = org.personas;
 
-/** Signs a seeded persona in with the demo password; returns a verified session. */
+// Full evals run longer than the 1 h JWT lifetime, so cached sessions are
+// re-minted well before expiry instead of failing mid-run with "JWT expired".
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const cache = new Map<string, { session: UserSession; at: number }>();
+
+/** Signs a seeded persona in (cached for 30 min); returns a verified session. */
 export async function personaSession(key: string): Promise<UserSession> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < SESSION_TTL_MS) return hit.session;
+  const session = await signIn(key);
+  cache.set(key, { session, at: Date.now() });
+  return session;
+}
+
+async function signIn(key: string): Promise<UserSession> {
   const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });

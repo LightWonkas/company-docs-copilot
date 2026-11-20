@@ -20,7 +20,6 @@ const client = getAnthropic();
 const index = await loadCorpusIndex(serviceClient());
 const { count: contextCount } = await serviceClient().from("chunks").select("id", { count: "exact", head: true }).not("context", "is", null);
 const golden = readJsonl<GoldenItem>("evals/golden/v1.jsonl").filter((g) => g.answerable);
-const sessions = new Map<string, Awaited<ReturnType<typeof personaSession>>>();
 
 const configs = [
   { name: "none", llmRewrite: false, reranker: () => new FusionOnlyReranker() },
@@ -36,8 +35,7 @@ const out: Record<string, unknown> = { label, contextualizedChunks: contextCount
 for (const cfg of configs) {
   const rows: { lang: string; category: string; r5: number; r20: number; mrr: number }[] = [];
   for (const item of golden) {
-    if (!sessions.has(item.persona)) sessions.set(item.persona, await personaSession(item.persona));
-    const r = await retrieve(sessions.get(item.persona)!, item.question, { llmRewrite: cfg.llmRewrite, reranker: cfg.reranker() });
+    const r = await retrieve(await personaSession(item.persona), item.question, { llmRewrite: cfg.llmRewrite, reranker: cfg.reranker() });
     const ranked = r.ranked.map((c) => c.chunkId);
     const gold = goldChunkIds(item, index);
     if (gold.size === 0) continue;

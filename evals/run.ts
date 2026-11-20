@@ -25,15 +25,11 @@ const client = getAnthropic();
 const mode = client ? "llm" : "offline-extractive";
 const log = (m: string) => process.stdout.write(`${m}\n`);
 
-const sessions = new Map<string, Awaited<ReturnType<typeof personaSession>>>();
 const permitted = new Map<string, Awaited<ReturnType<typeof permittedChunks>>>();
 async function persona(key: string) {
-  if (!sessions.has(key)) {
-    const s = await personaSession(key);
-    sessions.set(key, s);
-    permitted.set(key, await permittedChunks(s));
-  }
-  return { session: sessions.get(key)!, allowed: permitted.get(key)! };
+  const session = await personaSession(key);
+  if (!permitted.has(key)) permitted.set(key, await permittedChunks(session));
+  return { session, allowed: permitted.get(key)! };
 }
 
 // Not /g: a global regex keeps lastIndex between .test() calls.

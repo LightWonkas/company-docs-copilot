@@ -17,11 +17,9 @@ const golden = readJsonl<GoldenItem>("evals/golden/v1.jsonl");
 const answerable: number[] = [];
 const unanswerable: number[] = [];
 let reranker = "";
-const sessions = new Map<string, Awaited<ReturnType<typeof personaSession>>>();
 
 for (const item of golden) {
-  if (!sessions.has(item.persona)) sessions.set(item.persona, await personaSession(item.persona));
-  const r = await retrieve(sessions.get(item.persona)!, item.question);
+  const r = await retrieve(await personaSession(item.persona), item.question);
   reranker = r.reranker;
   (item.answerable ? answerable : unanswerable).push(r.topScore);
 }

@@ -57,6 +57,19 @@ describe("validateAnswer", () => {
     expect(v.invalid).toBe(0);
   });
 
+  it("accepts cited_text spanning table-row blocks the API joined without a separator", () => {
+    // Observed live: "...per week |" + "| Secondary..." arrives as "...per week || Secondary...".
+    const table: SentSearchResult[] = [
+      { source: "kb://d3#c3", chunkId: "c3", documentId: "d3", title: "On-call", blocks: ["| Primary | 2,750 TL per week |", "| Secondary | 1,250 TL per week |"] },
+    ];
+    const v = validateAnswer(
+      [{ type: "text", text: "x", citations: [cite({ source: "kb://d3#c3", end_block_index: 2, cited_text: "| Primary | 2,750 TL per week || Secondary | 1,250 TL per week |" })] }],
+      table,
+      new Set(["c3"]),
+    );
+    expect(v.invalid).toBe(0);
+  });
+
   it("marks uncited factual text unverified but leaves connectives plain", () => {
     const v = validateAnswer(
       [

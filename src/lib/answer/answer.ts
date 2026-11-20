@@ -1,12 +1,15 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { getAnthropic, models, usageOf, type UsageCost } from "@/lib/llm/anthropic";
+import { usageOf, type UsageCost } from "@/lib/llm/anthropic";
+import { stripReasoning, type LocalLlmClient } from "@/lib/llm/local";
 import { costUsd } from "@/lib/llm/pricing";
+import { getLlm, isLocalClient } from "@/lib/llm/provider";
 import { retrieve, type RetrievedChunk } from "@/lib/retrieval/retrieve";
 import type { Turn } from "@/lib/retrieval/rewrite";
 import type { UserSession } from "@/lib/retrieval/session";
 import { foldTurkish } from "@/lib/text/fold";
 import { abstentionText } from "./abstain";
-import { ABSTAIN_TAG, isModelAbstention, validateAnswer, type AnswerBlock } from "./citations";
+import { ABSTAIN_TAG, isModelAbstention, validateAnswer, type AnswerBlock, type ResponseTextBlock } from "./citations";
+import { LOCAL_PROMPT_VERSION, buildLocalAnswerRequest, parseCitationMarkers, streamingDisplay } from "./local";
 import { PROMPT_VERSION, buildAnswerRequest, toSearchResults, type SentSearchResult } from "./prompt";
 import { queryHash, redactQuery } from "./redact";
 
@@ -55,7 +58,7 @@ function answerEffort(): "low" | "medium" | "high" {
   return e === "low" || e === "high" ? e : "medium";
 }
 
-/** Without an API key: quote the best-matching sentences of the top chunk. */
+/** Without any LLM configured: quote the best-matching sentences of the top chunk. */
 function extractiveAnswer(question: string, sent: SentSearchResult[]): AnswerBlock[] {
   const terms = new Set(foldTurkish(question).split(/\W+/).filter((t) => t.length > 3));
   const top = sent[0];
@@ -69,6 +72,65 @@ function extractiveAnswer(question: string, sent: SentSearchResult[]): AnswerBlo
     status: "cited" as const,
     citations: [{ chunkId: top.chunkId, documentId: top.documentId, title: top.title, citedText: b.text }],
   }));
+}
+
+/** Emits text deltas but holds back a possible "<abstain/>" so it never flashes in the UI. */
+function deltaEmitter(emit: (event: AnswerEvent) => void) {
+  let buffered = "";
+  return (delta: string) => {
+    buffered += delta;
+    if (!ABSTAIN_TAG.startsWith(buffered.trimStart().slice(0, ABSTAIN_TAG.length))) {
+      emit({ type: "delta", text: buffered });
+      buffered = "";
+    }
+  };
+}
+
+type GenerateArgs = {
+  model: string;
+  question: string;
+  sent: SentSearchResult[];
+  history: Turn[];
+  emit: (event: AnswerEvent) => void;
+};
+
+/** textBlocks null = the model refused. */
+type Generation = { textBlocks: ResponseTextBlock[] | null; usage: UsageCost };
+
+/** Claude: native citations on search_result blocks. */
+async function generateAnthropic(client: Anthropic, args: GenerateArgs): Promise<Generation> {
+  const params = buildAnswerRequest({ model: args.model, question: args.question, results: args.sent, history: args.history, effort: answerEffort() });
+  const stream = client.beta.messages.stream(params);
+  stream.on("text", deltaEmitter(args.emit));
+  const message = await stream.finalMessage();
+  const usage = usageOf(message.usage as unknown as Anthropic.Usage);
+  if (message.stop_reason === "refusal") return { textBlocks: null, usage };
+  // Only text blocks carry answer text/citations (thinking and fallback
+  // markers are skipped).
+  const textBlocks = message.content.flatMap((b) =>
+    b.type === "text" ? [{ type: "text", text: b.text, citations: b.citations as unknown as Record<string, unknown>[] | null }] : [],
+  );
+  return { textBlocks, usage };
+}
+
+/** Local model: quoted citation markers, parsed into the native block shape. */
+async function generateLocal(client: LocalLlmClient, args: GenerateArgs): Promise<Generation> {
+  const onText = deltaEmitter(args.emit);
+  let raw = "";
+  let shown = "";
+  const { text, usage } = await client.stream(
+    buildLocalAnswerRequest({ model: args.model, question: args.question, results: args.sent, history: args.history }),
+    (delta) => {
+      raw += delta;
+      const display = streamingDisplay(stripReasoning(raw));
+      // Stream only append-only growth; the validated final blocks replace it anyway.
+      if (display.length > shown.length && display.startsWith(shown)) {
+        onText(display.slice(shown.length));
+        shown = display;
+      }
+    },
+  );
+  return { textBlocks: parseCitationMarkers(stripReasoning(text), args.sent), usage };
 }
 
 export async function answerQuestion(
@@ -105,40 +167,30 @@ export async function answerQuestion(
   let invalid = 0;
   let denied: string[] = [];
   let usage: UsageCost | null = null;
-  const client = getAnthropic();
-  const model = client ? models().answer : "offline-extractive";
+  const llm = getLlm();
+  const local = llm !== null && isLocalClient(llm.client);
+  const model = llm ? llm.models.answer : "offline-extractive";
+  const promptVersion = local ? LOCAL_PROMPT_VERSION : PROMPT_VERSION;
 
   if (retrieval.belowThreshold || context.length === 0) {
     abstainReason = "below_threshold";
-  } else if (!client) {
+  } else if (!llm) {
     blocks = extractiveAnswer(input.question, sent);
   } else {
     emit({ type: "status", stage: "generating" });
-    const params = buildAnswerRequest({ model, question: retrieval.query.standalone_query, results: sent, history, effort: answerEffort() });
-    const stream = client.beta.messages.stream(params);
-    let buffered = "";
-    stream.on("text", (delta) => {
-      buffered += delta;
-      // Hold back a possible "<abstain/>" so it never flashes in the UI.
-      if (!ABSTAIN_TAG.startsWith(buffered.trimStart().slice(0, ABSTAIN_TAG.length))) {
-        emit({ type: "delta", text: buffered });
-        buffered = "";
-      }
-    });
-    const message = await stream.finalMessage();
-    usage = usageOf(message.usage as unknown as Anthropic.Usage);
-    if (message.stop_reason === "refusal") {
+    const args: GenerateArgs = { model, question: retrieval.query.standalone_query, sent, history, emit };
+    const generation = isLocalClient(llm.client) ? await generateLocal(llm.client, args) : await generateAnthropic(llm.client, args);
+    usage = generation.usage;
+    if (generation.textBlocks === null) {
       abstainReason = "refusal";
     } else {
-      // Only text blocks carry answer text/citations (thinking and fallback
-      // markers are skipped).
-      const textBlocks = message.content.flatMap((b) =>
-        b.type === "text" ? [{ type: "text", text: b.text, citations: b.citations as unknown as Record<string, unknown>[] | null }] : [],
-      );
-      const validation = validateAnswer(textBlocks, sent, permitted);
+      // Same deterministic validation for both providers.
+      const validation = validateAnswer(generation.textBlocks, sent, permitted);
       invalid = validation.invalid;
       denied = validation.deniedChunkIds;
-      if (isModelAbstention(validation.blocks)) abstainReason = "model";
+      // A local model that wrote only markers (or nothing) has not answered.
+      const empty = local && !validation.blocks.some((b) => b.text.trim());
+      if (isModelAbstention(validation.blocks) || empty) abstainReason = "model";
       else blocks = validation.blocks;
     }
   }
@@ -179,7 +231,7 @@ export async function answerQuestion(
           abstained: abstainReason !== null,
           abstain_reason: abstainReason,
           citations_invalid: invalid,
-          prompt_version: PROMPT_VERSION,
+          prompt_version: promptVersion,
           model,
           latency_ms: latencyMs,
           cost_usd: cost,
@@ -199,7 +251,7 @@ export async function answerQuestion(
     p_cited_chunk_ids: [...sources.keys()],
     p_denied_chunk_ids: denied,
     p_model: model,
-    p_prompt_version: PROMPT_VERSION,
+    p_prompt_version: promptVersion,
     p_injection_flags: retrieval.results.filter((c) => c.injectionSuspected).map(() => "quarantined_chunk"),
     p_abstained: abstainReason !== null,
     p_citations_invalid: invalid,
@@ -217,7 +269,7 @@ export async function answerQuestion(
     abstainReason,
     citationsInvalid: invalid,
     model,
-    promptVersion: PROMPT_VERSION,
+    promptVersion,
     latencyMs,
     costUsd: cost,
     retrieval: {

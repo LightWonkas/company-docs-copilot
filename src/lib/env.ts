@@ -55,7 +55,10 @@ const serverEnvSchema = z.object({
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
-  return serverEnvSchema.parse(source);
+  // CI (GitHub Actions `${{ secrets.X }}`) sets an unset secret to "", which
+  // must mean "not configured", not "invalid".
+  const defined = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== ""));
+  return serverEnvSchema.parse(defined);
 }
 
 /** Server-only values. Never import this into a Client Component. */

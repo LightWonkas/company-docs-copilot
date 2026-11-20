@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePublicEnv } from "@/lib/env";
+import { parsePublicEnv, parseServerEnv } from "@/lib/env";
 
 const valid = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:56721",
@@ -28,5 +28,18 @@ describe("parsePublicEnv", () => {
 
   it("rejects a missing URL", () => {
     expect(() => parsePublicEnv({ ...valid, NEXT_PUBLIC_SUPABASE_URL: undefined })).toThrow();
+  });
+});
+
+describe("parseServerEnv", () => {
+  it("treats an empty secret (unset GitHub Actions secret) as not configured", () => {
+    const env = parseServerEnv({ ANTHROPIC_API_KEY: "", SUPABASE_SECRET_KEY: "", DEMO_MODE: "" });
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.SUPABASE_SECRET_KEY).toBeUndefined();
+    expect(env.DEMO_MODE).toBe(false);
+  });
+
+  it("still rejects a malformed secret key", () => {
+    expect(() => parseServerEnv({ SUPABASE_SECRET_KEY: "eyJ.x.y" })).toThrow();
   });
 });

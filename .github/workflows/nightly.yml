@@ -30,8 +30,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:start
       - run: pnpm env:local
-      - run: pnpm seed
+      # Before seed: the mutation test runs `supabase db reset` after every
+      # mutation, which wipes seeded personas and corpus.
       - run: pnpm test:mutation
+      - run: pnpm seed
       # Full gates: leaks, injection ASR, citation validity, faithfulness drop.
       - run: pnpm eval
       - name: promptfoo model-graded RAG checks
